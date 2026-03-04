@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.curb.trillboards.app-mergeDebugResources-21:/values-watch-v21/values-watch-v21.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\johnm\\.gradle\\caches\\transforms-4\\03d10d25bdf91f1e03a4061a4963807b\\transformed\\appcompat-1.6.1\\res\\values-watch-v21\\values-watch-v21.xml",
+                    "from": {
+                        "startLines": "2,6,10",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,271,499",
+                        "endLines": "5,9,13",
+                        "endColumns": "12,12,12",
+                        "endOffsets": "266,494,724"
+                    }
+                }
+            ]
+        }
+    ]
+}
