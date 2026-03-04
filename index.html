@@ -272,17 +272,24 @@
     <div class="sr"><span class="sl">Fills</span><span class="sv green" id="s-fills">0</span></div>
     <div class="sr"><span class="sl">Errors / No Fill</span><span class="sv red" id="s-err">0</span></div>
     <div class="sr"><span class="sl">Fill Rate</span><span class="sv" id="s-rate">0%</span></div>
+    <div class="sr"><span class="sl">Avg Fill Rate</span><span class="sv" id="s-avg-rate">0%</span></div>
     <div class="sr"><span class="sl">Ads Completed</span><span class="sv blue" id="s-done">0</span></div>
     <div class="sr"><span class="sl">Impressions Fired</span><span class="sv green" id="s-imp">0</span></div>
     <div class="sr"><span class="sl">Pixels Dead</span><span class="sv" id="s-dead">0</span></div>
     <div class="sr"><span class="sl">Last Fill Source</span><span class="sv blue" id="s-src">-</span></div>
     <div class="sr"><span class="sl">Last Advertiser</span><span class="sv" id="s-adv">-</span></div>
     <div class="sr"><span class="sl">Floor CPM</span><span class="sv orange" id="s-floor">$3.00</span></div>
+    <div class="sr"><span class="sl">Avg CPM (est.)</span><span class="sv orange" id="s-avg-cpm">$0.00</span></div>
     <div class="sr"><span class="sl">Est. Rev (Session)</span><span class="sv green" id="s-rev">$0.0000</span></div>
     <div class="sr"><span class="sl">Est. Rev (Today)</span><span class="sv green" id="s-rev-day">$0.00</span></div>
     <div class="sr"><span class="sl">Heartbeat</span><span class="sv" id="s-hb">-</span></div>
     <div class="sr"><span class="sl">HB Failures</span><span class="sv" id="s-hb-fail">0</span></div>
     <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
+  </div>
+  <div class="sec"><div class="sec-t">Ad CPM Log</div>
+    <div id="cpm-log" class="scrollbox" style="max-height:120px">
+      <div style="color:#444;padding:4px">No ads played yet</div>
+    </div>
   </div>
   <div class="sec"><div class="sec-t">Waterfall Sources</div><div id="source-list"></div></div>
   <div class="sec"><div class="sec-t">Events</div>
@@ -324,6 +331,7 @@
 var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
 var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
+var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 var INTERVAL=10000;
 var HB_INTERVAL_MS=30000;
 var WATERFALL_TIMEOUT=8000;
@@ -343,11 +351,15 @@ var srcStats={},pixEv=[],pixDest={},logs=[],vastPixels=[],adMeta=[],adMetaTs='',
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
 var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
-var IMP_URL='https://api.trillboards.com/v1/partner/impression';
+
+// Per-ad CPM tracking
+// We can't get real CPM from IMA SDK directly, but we log what we can:
+// trafficking params, deal ID, ad system — and note floor CPM as the floor.
+// fillRateHistory tracks per-cycle fill (1=fill, 0=no fill) for rolling avg.
+var cpmLog=[];         // [{ts, adId, adv, dur, system, deal, cpm, source}]
+var fillHistory=[];    // [1,0,1,1,...] one entry per waterfall cycle
 
 // ── Ad identity cache ─────────────────────────────────────────────────────────
-// Populated during STARTED so COMPLETE can always send the right IDs even if
-// getCurrentAd() returns null by the time the event fires.
 var cachedAdId='';
 var cachedAid='';
 var cachedDur=0;
@@ -359,18 +371,13 @@ function cacheAdInfo(ad){
   try{cachedDur=(ad.getDuration)?Math.round(ad.getDuration()):0;}catch(e){}
 }
 
-// Resolve ad info: try getCurrentAd() first, fall back to cache.
-// If both are empty, poll up to maxTries x 100ms then send whatever we have.
 function resolveAdAndSend(completed,maxTries){
   maxTries=maxTries||10;
   function attempt(tries){
     var ad=null;
     try{ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;}catch(e){}
-    if(ad){
-      cacheAdInfo(ad); // refresh cache while we still have it
-    }
+    if(ad)cacheAdInfo(ad);
     var adid=cachedAdId||'unknown';
-    var aid=cachedAid||'';
     var dur=cachedDur||0;
     if(adid==='unknown'&&tries<maxTries){
       log('resolveAd: no id yet, retry '+(tries+1)+'/'+maxTries,'warn');
@@ -378,7 +385,7 @@ function resolveAdAndSend(completed,maxTries){
       return;
     }
     if(tries>0)log('resolveAd: resolved after '+tries+' retries: '+adid,'ok');
-    sendImpression(adid,aid,dur,completed);
+    sendImpression(adid,dur,completed);
   }
   attempt(0);
 }
@@ -446,16 +453,49 @@ function updStats(){
   var r=S.req>0?Math.round((S.fills/S.req)*100):0;
   st('s-req',S.req);st('s-fills',S.fills);st('s-err',S.err);st('s-done',S.done);
   st('s-imp',S.imp);st('s-dead',S.dead);st('s-src',S.src);st('s-adv',S.adv);
-  var rev=(S.imp||0)*(FLOOR_CPM/1000);
+
+  // Rolling avg fill rate (last 20 cycles)
+  var recent=fillHistory.slice(-20);
+  var avgFill=recent.length>0?Math.round((recent.reduce(function(a,b){return a+b;},0)/recent.length)*100):0;
+  var avgFillEl=document.getElementById('s-avg-rate');
+  if(avgFillEl){avgFillEl.textContent=avgFill+'%';avgFillEl.className='sv '+(avgFill>60?'green':avgFill>30?'yellow':'red');}
+
+  // Avg CPM from cpmLog (floor-based until real data available)
+  var avgCpm=FLOOR_CPM;
+  if(cpmLog.length>0){
+    var sum=cpmLog.reduce(function(a,b){return a+b.cpm;},0);
+    avgCpm=sum/cpmLog.length;
+  }
+  st('s-avg-cpm','$'+avgCpm.toFixed(2));
+
+  var rev=(S.done||0)*(avgCpm/1000); // use completed plays x avg CPM
   st('s-rev','$'+rev.toFixed(4));
   var hrs=(Date.now()-t0)/3600000;
   var dayEst=hrs>0?(rev/hrs)*24:0;
   st('s-rev-day','$'+dayEst.toFixed(2));
+
   var re=document.getElementById('s-rate');
   if(re){re.textContent=r+'%';re.className='sv '+(r>60?'green':r>30?'yellow':'red')}
   var de=document.getElementById('s-dead');
   if(de)de.className='sv '+(S.dead>0?'red':'green');
-  rendSrc()}
+  rendSrc();rendCpmLog()}
+
+function rendCpmLog(){
+  var e=document.getElementById('cpm-log');if(!e)return;
+  if(!cpmLog.length){e.innerHTML='<div style="color:#444;padding:4px">No ads played yet</div>';return;}
+  e.innerHTML=cpmLog.slice(0,20).map(function(c){
+    var cpmColor=c.cpm>=4?'#0f0':c.cpm>=3?'#f80':'#f44';
+    var dealStr=c.deal?(' deal:'+c.deal):'';
+    var tpStr=c.tp?(' tp:'+c.tp):'';
+    return'<div style="padding:3px 2px;border-bottom:1px solid #0a0a0a;font-size:10px">'+
+      '<span style="color:#333">'+c.ts+'</span> '+
+      '<span style="color:'+cpmColor+';font-weight:bold">$'+c.cpm.toFixed(2)+' CPM</span> '+
+      '<span style="color:#888">'+c.dur+'s</span> '+
+      '<span style="color:#555">'+c.source+'</span>'+
+      (c.adv&&c.adv!=='?'?'<span style="color:#4af"> '+c.adv+'</span>':'')+
+      (dealStr?'<div style="color:#555;font-size:9px">'+dealStr+tpStr+'</div>':'')+
+    '</div>';
+  }).join('');}
 
 function rendSrc(){var e=document.getElementById('source-list');if(!e||!sources.length)return;
   e.innerHTML=sources.map(function(s,i){
@@ -558,30 +598,65 @@ function switchTab(t){
   document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
   document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
 
-function generateId(){return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);}
-
-function sendImpression(adid,aid,duration,completed){
-  var impid=generateId();
-  var params=new URLSearchParams({
-    adid:adid||'unknown',impid:impid,did:DEVICE_ID,sid:SCREEN_ID,
-    aid:aid||'',duration:duration||0,completed:completed?'true':'false',
-    display_mode:'fullscreen',display_area_ratio:'1.0'
+// ── sendImpression — /v1/partner/tracking/batch ───────────────────────────────
+// Schema confirmed with Sneh via Raw API tester:
+// POST body: { "impressions": [{ screen_id, device_id, ad_id, timestamp, duration_ms, completed }] }
+function sendImpression(adid,durationSec,completed){
+  var body=JSON.stringify({
+    impressions:[{
+      screen_id: SCREEN_ID,
+      device_id: DEVICE_ID,
+      ad_id:     adid||'unknown',
+      timestamp: new Date().toISOString(),
+      duration_ms: (durationSec||0)*1000,
+      completed: !!completed
+    }]
   });
-  fetch(IMP_URL+'?'+params.toString(),{
+  fetch(BATCH_URL,{
     method:'POST',
-    headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'}
+    headers:{
+      'Authorization':'Bearer '+HB_KEY,
+      'Content-Type':'application/json'
+    },
+    body: body
   }).then(function(r){
     trackBytes('imp','imp',512);
-    log('Impression POST OK ('+r.status+') completed:'+completed+' adid:'+adid,'ok');
+    log('Batch POST OK ('+r.status+') completed:'+completed+' ad_id:'+adid,'ok');
     addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 TRILLBOARDS: '+(adid||'unknown'),'');
-  }).catch(function(e){log('Impression POST FAIL: '+e.message,'err');});
+  }).catch(function(e){
+    log('Batch POST FAIL: '+e.message,'err');
+  });
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
 function sendHeartbeat(){
   fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({device_id:DEVICE_ID,timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
   }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}trackBytes('hb','hb',256);log('HB OK ('+r.status+')','ok');
   }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});
+}
+
+function logAdCpm(ad,sourceName,advertiser){
+  var ts=new Date().toTimeString().substring(0,8);
+  var dur=cachedDur||0;
+  // Try to extract real CPM from trafficking parameters
+  var tp='',deal='',cpm=FLOOR_CPM,system='';
+  try{
+    var tpObj=ad&&ad.getTraffickingParameters?ad.getTraffickingParameters():{};
+    var tpKeys=Object.keys(tpObj);
+    // Look for common CPM keys DSPs pass through
+    var cpmKeys=['cpm','CPM','price','Price','deal_price','bid_price','clearing_price'];
+    for(var i=0;i<cpmKeys.length;i++){
+      if(tpObj[cpmKeys[i]]){var v=parseFloat(tpObj[cpmKeys[i]]);if(!isNaN(v)&&v>0){cpm=v;break;}}
+    }
+    // Summarise all tp params for logging
+    if(tpKeys.length>0)tp=tpKeys.map(function(k){return k+'='+tpObj[k];}).join(' ');
+  }catch(e){}
+  try{deal=(ad&&ad.getDealId)?ad.getDealId():'';}catch(e){}
+  try{system=(ad&&ad.getAdSystem)?ad.getAdSystem():'';}catch(e){}
+  cpmLog.unshift({ts:ts,adId:cachedAdId,adv:advertiser||'?',dur:dur,source:sourceName,cpm:cpm,deal:deal,tp:tp,system:system});
+  if(cpmLog.length>50)cpmLog.pop();
+  log('CPM log: $'+cpm.toFixed(2)+' ad:'+cachedAdId+' src:'+sourceName+(deal?' deal:'+deal:'')+(system?' sys:'+system:''),'ok');
 }
 
 function dumpAdMeta(ad){
@@ -592,10 +667,16 @@ function dumpAdMeta(ad){
   try{if(ad.getAdvertiserName&&ad.getAdvertiserName())info.push({k:'Advertiser',v:ad.getAdvertiserName()});}catch(e){}
   try{if(ad.getTitle&&ad.getTitle())info.push({k:'Title',v:ad.getTitle()});}catch(e){}
   try{if(ad.getAdSystem&&ad.getAdSystem())info.push({k:'Ad System',v:ad.getAdSystem()});}catch(e){}
+  try{if(ad.getDealId&&ad.getDealId())info.push({k:'Deal ID',v:ad.getDealId()});}catch(e){}
   try{if(ad.getMediaUrl&&ad.getMediaUrl())info.push({k:'Media URL',v:ad.getMediaUrl()});}catch(e){}
   try{if(ad.getDuration)info.push({k:'Duration',v:Math.round(ad.getDuration())+'s'});}catch(e){}
   try{if(ad.getContentType&&ad.getContentType())info.push({k:'Content Type',v:ad.getContentType()});}catch(e){}
   try{if(ad.getWidth)info.push({k:'Size',v:ad.getWidth()+'x'+ad.getHeight()});}catch(e){}
+  try{
+    var tp=ad.getTraffickingParameters?ad.getTraffickingParameters():{};
+    var tpKeys=Object.keys(tp);
+    if(tpKeys.length>0)info.push({k:'Trafficking Params',v:tpKeys.map(function(k){return k+'='+tp[k];}).join(', ')});
+  }catch(e){}
   adMeta=info;adMetaTs=ts;
   log('Ad meta: '+info.length+' fields','ok');
   var src=sources[idx]||sources[0];
@@ -621,6 +702,19 @@ function parseVastPixels(xml){
     var re2=new RegExp('<'+tag+'[^>]*>([^<]+)</'+tag+'>','gi');
     while((m=re2.exec(xml))!==null){var u=m[1].trim();if(u&&u.indexOf('http')===0)urls.push({tag:tag,url:u});}
   });
+  // Also try to extract CPM from VAST extensions
+  try{
+    var extRe=/<Extension[^>]*type="[^"]*price[^"]*"[^>]*>([\s\S]*?)<\/Extension>/gi;
+    var em;
+    while((em=extRe.exec(xml))!==null){
+      var priceRe=/<Price[^>]*>([\s\S]*?)<\/Price>/i;
+      var pm=priceRe.exec(em[1]);
+      if(pm){var pv=parseFloat(pm[1].trim());if(!isNaN(pv)&&pv>0){
+        log('VAST price extension: $'+pv.toFixed(2)+' CPM','ok');
+        if(cpmLog.length>0&&cpmLog[0].cpm===FLOOR_CPM)cpmLog[0].cpm=pv;
+      }}
+    }
+  }catch(e){}
   log('VAST parsed: '+urls.length+' tracking URLs','ok');
   vastPixels=urls;
   urls.forEach(function(item){
@@ -803,8 +897,8 @@ function toggleTestMode(){
 
 function clearStats(){
   S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};
-  srcStats={};pixEv=[];pixDest={};logs=[];
-  updStats();rendEv();rendLog();rendLF();
+  srcStats={};pixEv=[];pixDest={};logs=[];cpmLog=[];fillHistory=[];
+  updStats();rendEv();rendLog();rendLF();rendCpmLog();
   log('Stats cleared','ok');flashSaved();}
 
 function reloadSources(){toggleSettings();log('Reloading waterfall sources...','info');fetchSources();}
@@ -846,6 +940,7 @@ function initIMA(){
 function reqNext(){
   clearTimeout(nextTimer);cdown=null;st('s-next','-');
   if(idx>=sources.length){
+    fillHistory.push(0); // full cycle with no fill
     log('All exhausted - '+INTERVAL/1000+'s wait','warn');
     setNP('NO FILL','All '+sources.length+' sources failed');
     idx=0;updStats();sched(INTERVAL);return}
@@ -876,7 +971,6 @@ function onLoaded(event){
 
   adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    // Cache ad identity immediately — used as fallback by IMPRESSION and COMPLETE
     cachedAdId='';cachedAid='';cachedDur=0;
     cacheAdInfo(ad);
     var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';
@@ -884,39 +978,36 @@ function onLoaded(event){
     log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');
     addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
     srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;
+    fillHistory.push(1); // record fill for avg calculation
     playing=true;adT0=Date.now();
     if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
-    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);updStats();
+    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);
+    logAdCpm(ad,s.name,adv); // log CPM entry for this ad
+    updStats();
     if(ad)dumpAdMeta(ad);
   },false);
 
-  // IMPRESSION: getCurrentAd() usually works here; cache is backup
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
     S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    if(ad)cacheAdInfo(ad); // refresh cache while available
-    var adid=cachedAdId||'unknown';
-    var aid=cachedAid||'';
-    var dur=cachedDur||0;
-    sendImpression(adid,aid,dur,false);
+    if(ad)cacheAdInfo(ad);
+    sendImpression(cachedAdId||'unknown',cachedDur||0,false);
   },false);
 
   adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){
-    // Last safe moment to refresh cache before COMPLETE fires
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
     if(ad)cacheAdInfo(ad);
     addEv('q','75% - '+s.name,'');
   },false);
 
-  // COMPLETE: ad object is often null here — use resolveAdAndSend with retry
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p,'ok');
     addEv('done','COMPLETE - '+s.name+' - '+p,'');
     S.done++;updStats();
-    resolveAdAndSend(true,10); // retry up to 10x100ms if getCurrentAd() is null
+    resolveAdAndSend(true,10);
   },false);
 
   try{
