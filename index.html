@@ -74,6 +74,7 @@
     .lfrow.q{border-left-color:#ff0;color:#990}.lfrow.done{border-left-color:#f80;color:#f80}
     .lfrow.err{border-left-color:#f44;color:#f44}.lfrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
     .lfdest{color:#333;font-size:9px;margin-top:1px;word-break:break-all}
+    .du-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #111}
   </style>
 </head>
 <body>
@@ -89,8 +90,6 @@
       <span style="color:#0fc;font-size:14px;font-weight:bold;letter-spacing:2px">DATA USAGE</span>
       <span onclick="toggleData()" style="color:#555;font-size:22px;cursor:pointer;padding:0 8px">&#10005;</span>
     </div>
-
-    <!-- Summary cards -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
       <div style="background:#080808;border:1px solid #1a1a1a;border-radius:6px;padding:12px;text-align:center">
         <div style="color:#555;font-size:9px;letter-spacing:1px;margin-bottom:4px">SESSION</div>
@@ -113,8 +112,6 @@
         <div id="du-fleet-sub" style="color:#444;font-size:10px;margin-top:2px">projected total</div>
       </div>
     </div>
-
-    <!-- Breakdown -->
     <div style="color:#0fc;font-size:10px;letter-spacing:2px;margin-bottom:8px">BREAKDOWN</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div class="du-row"><span style="color:#555">Ad Video (estimated)</span><span id="du-video" style="color:#fff">0 B</span></div>
@@ -124,15 +121,12 @@
       <div class="du-row"><span style="color:#555">Impression POSTs</span><span id="du-imp" style="color:#fff">0 B</span></div>
       <div class="du-row"><span style="color:#555">Waterfall API</span><span id="du-api" style="color:#fff">0 B</span></div>
     </div>
-
-    <!-- Per ad stats -->
     <div style="color:#0fc;font-size:10px;letter-spacing:2px;margin-bottom:8px">PER AD AVERAGE</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div class="du-row"><span style="color:#555">Avg per ad play</span><span id="du-per-ad" style="color:#fff">0 B</span></div>
       <div class="du-row"><span style="color:#555">Ads played</span><span id="du-ads-played" style="color:#fff">0</span></div>
       <div class="du-row"><span style="color:#555">Avg ad duration</span><span id="du-avg-dur" style="color:#fff">0s</span></div>
     </div>
-
     <button onclick="resetDataUsage()" style="width:100%;background:#1a0000;border:1px solid #3a0000;color:#f44;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-bottom:8px">RESET DATA COUNTERS</button>
     <button onclick="toggleData()" style="width:100%;background:#1a1a1a;border:1px solid #333;color:#555;padding:10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">CLOSE</button>
   </div>
@@ -144,8 +138,6 @@
       <span style="color:#88f;font-size:14px;font-weight:bold;letter-spacing:2px">&#9881; SETTINGS</span>
       <span onclick="toggleSettings()" style="color:#555;font-size:22px;cursor:pointer;padding:0 8px">&#10005;</span>
     </div>
-
-    <!-- REVENUE -->
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px;margin-top:4px">REVENUE</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="margin-bottom:10px">
@@ -157,8 +149,6 @@
         <div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-cpm-cur" style="color:#f80">$3.00</span></div>
       </div>
     </div>
-
-    <!-- TIMING -->
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">TIMING</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="margin-bottom:10px">
@@ -186,8 +176,6 @@
         <div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-timeout-cur" style="color:#f80">8s</span></div>
       </div>
     </div>
-
-    <!-- DEVICE -->
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">DEVICE IDENTITY</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="margin-bottom:10px">
@@ -215,8 +203,6 @@
         <div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-key-cur" style="color:#f80">trb_partner_****</span></div>
       </div>
     </div>
-
-    <!-- DISPLAY -->
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">DISPLAY</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -247,8 +233,6 @@
         </div>
       </div>
     </div>
-
-    <!-- DEBUG -->
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">DEBUG</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="margin-bottom:10px">
@@ -269,9 +253,7 @@
       <button onclick="clearStats()" style="width:100%;background:#1a0000;border:1px solid #3a0000;color:#f44;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-bottom:8px">CLEAR SESSION STATS</button>
       <button onclick="reloadSources()" style="width:100%;background:#001a00;border:1px solid #003a00;color:#0f0;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">RELOAD WATERFALL SOURCES</button>
     </div>
-
     <div id="set-saved" style="display:none;text-align:center;color:#0f0;font-size:12px;padding:8px;background:#001500;border-radius:4px;margin-bottom:12px">Settings saved!</div>
-
     <button onclick="toggleSettings()" style="width:100%;background:#1a1a1a;border:1px solid #333;color:#555;padding:10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">CLOSE</button>
   </div>
 </div>
@@ -360,6 +342,9 @@ var DU={bytes:0,reqs:0,video:0,vast:0,pixels:0,hb:0,imp:0,api:0,adDurs:[],t0:Dat
 var srcStats={},pixEv=[],pixDest={},logs=[],vastPixels=[],adMeta=[],adMetaTs='',S_hbOk=0,S_hbFail=0;
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
+var COMPLETE_URL='https://api.trillboards.com/v1/partner/impression/complete';
+var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
+var IMP_URL='https://api.trillboards.com/v1/partner/impression';
 
 var oOpen=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,url){this._u=url;return oOpen.apply(this,arguments)};
@@ -533,12 +518,9 @@ function switchTab(t){
   document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';
   document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
   document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
-var IMP_URL='https://api.trillboards.com/v1/partner/impression';
-var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
 
 function generateId(){
-  return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);
-}
+  return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);}
 
 function sendImpression(adid,aid,duration,completed){
   var impid=generateId();
@@ -560,8 +542,9 @@ function sendImpression(adid,aid,duration,completed){
       'Content-Type':'application/json'
     }
   }).then(function(r){
-    trackBytes('imp','imp',512);log('Impression POST OK ('+r.status+') adid:'+adid,'ok');
-    addEv('imp','IMP SENT TO TRILLBOARDS: '+(adid||'unknown'),'');
+    trackBytes('imp','imp',512);
+    log('Impression POST OK ('+r.status+') completed:'+completed+' adid:'+adid,'ok');
+    addEv('imp','IMP '+(completed?'COMPLETE':'START')+' → TRILLBOARDS: '+(adid||'unknown'),'');
   }).catch(function(e){
     log('Impression POST FAIL: '+e.message,'err');
   });
@@ -569,7 +552,7 @@ function sendImpression(adid,aid,duration,completed){
 
 function sendHeartbeat(){
   fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({device_id:'P_691cbdd4b3117cb1b692f4ae',timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
+    body:JSON.stringify({device_id:DEVICE_ID,timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
   }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}trackBytes('hb','hb',256);log('HB OK ('+r.status+')','ok');
   }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});
 }
@@ -605,7 +588,7 @@ function parseVastPixels(xml){
   var urls=[];
   var tags=['Impression','Tracking','ClickTracking','ErrorUri','ViewableImpression','NotViewableImpression'];
   tags.forEach(function(tag){
-    var re=new RegExp('<'+tag+'[^>]*>\s*<!\[CDATA\[([^\]]+)\]\]>\s*</'+tag+'>','gi');
+    var re=new RegExp('<'+tag+'[^>]*>\\s*<!\\[CDATA\\[([^\\]]+)\\]\\]>\\s*</'+tag+'>','gi');
     var m;
     while((m=re.exec(xml))!==null){ var u=m[1].trim(); if(u) urls.push({tag:tag,url:u}); }
     var re2=new RegExp('<'+tag+'[^>]*>([^<]+)</'+tag+'>','gi');
@@ -622,7 +605,6 @@ function parseVastPixels(xml){
   addEv('imp','VAST: '+urls.length+' tracking URLs parsed','');
 }
 
-// Block touch/click on ad to prevent pause
 document.addEventListener('DOMContentLoaded',function(){
   var blocker=document.getElementById('touch-blocker');
   if(blocker){
@@ -633,267 +615,187 @@ document.addEventListener('DOMContentLoaded',function(){
   var ad=document.getElementById('ad-container');
   if(ad){
     ad.addEventListener('touchstart',function(e){
-      // only block if not hitting our buttons
-      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'){
-        e.preventDefault();
-      }
+      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'){e.preventDefault();}
     },{passive:false});
   }
 });
+
 function formatBytes(b){
   if(b<1024) return b.toFixed(0)+' B';
   if(b<1048576) return (b/1024).toFixed(2)+' KB';
   if(b<1073741824) return (b/1048576).toFixed(2)+' MB';
-  return (b/1073741824).toFixed(2)+' GB';
-}
+  return (b/1073741824).toFixed(2)+' GB';}
 
-function trackBytes(url, type, bytes){
-  DU.bytes+=bytes; DU.reqs++;
-  if(type==='video') DU.video+=bytes;
-  else if(type==='vast') DU.vast+=bytes;
-  else if(type==='pixel') DU.pixels+=bytes;
-  else if(type==='hb') DU.hb+=bytes;
-  else if(type==='imp') DU.imp+=bytes;
-  else if(type==='api') DU.api+=bytes;
-}
+function trackBytes(url,type,bytes){
+  DU.bytes+=bytes;DU.reqs++;
+  if(type==='video')DU.video+=bytes;
+  else if(type==='vast')DU.vast+=bytes;
+  else if(type==='pixel')DU.pixels+=bytes;
+  else if(type==='hb')DU.hb+=bytes;
+  else if(type==='imp')DU.imp+=bytes;
+  else if(type==='api')DU.api+=bytes;}
 
 function toggleData(){
-  var p=document.getElementById('data-panel');
-  if(!p) return;
+  var p=document.getElementById('data-panel');if(!p)return;
   var showing=p.style.display!=='none';
   p.style.display=showing?'none':'block';
-  if(!showing) refreshDataPanel();
-}
+  if(!showing)refreshDataPanel();}
 
 function refreshDataPanel(){
-  var st=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
-  st('du-session', formatBytes(DU.bytes));
-  st('du-session-req', DU.reqs+' requests');
-  // daily estimate
+  var s=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+  s('du-session',formatBytes(DU.bytes));
+  s('du-session-req',DU.reqs+' requests');
   var hrs=(Date.now()-DU.t0)/3600000;
   var daily=hrs>0?(DU.bytes/hrs)*24:0;
-  st('du-daily', formatBytes(daily));
-  st('du-monthly', formatBytes(daily*30));
-  st('du-fleet', formatBytes(daily*30*9000));
-  // breakdown
-  st('du-video', formatBytes(DU.video));
-  st('du-vast', formatBytes(DU.vast));
-  st('du-pixels', formatBytes(DU.pixels));
-  st('du-hb', formatBytes(DU.hb));
-  st('du-imp', formatBytes(DU.imp));
-  st('du-api', formatBytes(DU.api));
-  // per ad
+  s('du-daily',formatBytes(daily));
+  s('du-monthly',formatBytes(daily*30));
+  s('du-fleet',formatBytes(daily*30*9000));
+  s('du-video',formatBytes(DU.video));
+  s('du-vast',formatBytes(DU.vast));
+  s('du-pixels',formatBytes(DU.pixels));
+  s('du-hb',formatBytes(DU.hb));
+  s('du-imp',formatBytes(DU.imp));
+  s('du-api',formatBytes(DU.api));
   var avgDur=DU.adDurs.length>0?(DU.adDurs.reduce(function(a,b){return a+b;},0)/DU.adDurs.length).toFixed(0)+'s':'0s';
   var perAd=DU.adDurs.length>0?formatBytes(DU.bytes/DU.adDurs.length):'0 B';
-  st('du-per-ad', perAd);
-  st('du-ads-played', DU.adDurs.length);
-  st('du-avg-dur', avgDur);
-}
+  s('du-per-ad',perAd);s('du-ads-played',DU.adDurs.length);s('du-avg-dur',avgDur);}
 
 function resetDataUsage(){
   DU={bytes:0,reqs:0,video:0,vast:0,pixels:0,hb:0,imp:0,api:0,adDurs:[],t0:Date.now()};
-  refreshDataPanel();
-}
+  refreshDataPanel();}
 
 function toggleSettings(){
-  var p=document.getElementById('set-panel');
-  if(!p) return;
+  var p=document.getElementById('set-panel');if(!p)return;
   var showing=p.style.display!=='none';
   p.style.display=showing?'none':'block';
-  if(!showing) loadSettingsUI();
-}
+  if(!showing)loadSettingsUI();}
 
 function loadSettingsUI(){
   try{
-    // CPM
-    var ci=document.getElementById('set-cpm'); if(ci) ci.value=FLOOR_CPM.toFixed(2);
-    var cc=document.getElementById('set-cpm-cur'); if(cc) cc.textContent='$'+FLOOR_CPM.toFixed(2);
-    // Interval
-    var ii=document.getElementById('set-interval'); if(ii) ii.value=Math.round(INTERVAL/1000);
-    var ic=document.getElementById('set-interval-cur'); if(ic) ic.textContent=Math.round(INTERVAL/1000)+'s';
-    // HB
-    var hi=document.getElementById('set-hb'); if(hi) hi.value=Math.round(HB_INTERVAL_MS/1000);
-    var hc=document.getElementById('set-hb-cur'); if(hc) hc.textContent=Math.round(HB_INTERVAL_MS/1000)+'s';
-    // Timeout
-    var ti=document.getElementById('set-timeout'); if(ti) ti.value=Math.round(WATERFALL_TIMEOUT/1000);
-    var tc=document.getElementById('set-timeout-cur'); if(tc) tc.textContent=Math.round(WATERFALL_TIMEOUT/1000)+'s';
-    // Device
-    var di=document.getElementById('set-did'); if(di) di.value=DEVICE_ID;
-    var dc=document.getElementById('set-did-cur'); if(dc) dc.textContent=DEVICE_ID;
-    // Screen
-    var si=document.getElementById('set-sid'); if(si) si.value=SCREEN_ID;
-    var sc=document.getElementById('set-sid-cur'); if(sc) sc.textContent=SCREEN_ID;
-    // Key
-    var kc=document.getElementById('set-key-cur'); if(kc) kc.textContent='trb_partner_****';
-    // Force source
-    var fi=document.getElementById('set-force'); if(fi) fi.value=FORCED_SOURCE||0;
-    var fc=document.getElementById('set-force-cur'); if(fc) fc.textContent=FORCED_SOURCE?'Source '+FORCED_SOURCE:'auto';
-    // Hide UI
-    var hb=document.getElementById('set-hide-btn'); if(hb){hb.textContent=UI_HIDDEN?'ON':'OFF';hb.style.color=UI_HIDDEN?'#0f0':'#aaa';}
-    // Test mode
-    var tb=document.getElementById('set-test-btn'); if(tb){tb.textContent=TEST_MODE?'ON':'OFF';tb.style.color=TEST_MODE?'#0f0':'#aaa';}
-    // Brightness
-    var br=document.getElementById('set-bright'); if(br) br.value=BRIGHTNESS;
-    var bv=document.getElementById('set-bright-val'); if(bv) bv.textContent=BRIGHTNESS;
-  }catch(e){ console.log('loadSettingsUI error:',e); }
-}
+    var ci=document.getElementById('set-cpm');if(ci)ci.value=FLOOR_CPM.toFixed(2);
+    var cc=document.getElementById('set-cpm-cur');if(cc)cc.textContent='$'+FLOOR_CPM.toFixed(2);
+    var ii=document.getElementById('set-interval');if(ii)ii.value=Math.round(INTERVAL/1000);
+    var ic=document.getElementById('set-interval-cur');if(ic)ic.textContent=Math.round(INTERVAL/1000)+'s';
+    var hi=document.getElementById('set-hb');if(hi)hi.value=Math.round(HB_INTERVAL_MS/1000);
+    var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=Math.round(HB_INTERVAL_MS/1000)+'s';
+    var ti=document.getElementById('set-timeout');if(ti)ti.value=Math.round(WATERFALL_TIMEOUT/1000);
+    var tc=document.getElementById('set-timeout-cur');if(tc)tc.textContent=Math.round(WATERFALL_TIMEOUT/1000)+'s';
+    var di=document.getElementById('set-did');if(di)di.value=DEVICE_ID;
+    var dc=document.getElementById('set-did-cur');if(dc)dc.textContent=DEVICE_ID;
+    var si=document.getElementById('set-sid');if(si)si.value=SCREEN_ID;
+    var sc=document.getElementById('set-sid-cur');if(sc)sc.textContent=SCREEN_ID;
+    var kc=document.getElementById('set-key-cur');if(kc)kc.textContent='trb_partner_****';
+    var fi=document.getElementById('set-force');if(fi)fi.value=FORCED_SOURCE||0;
+    var fc=document.getElementById('set-force-cur');if(fc)fc.textContent=FORCED_SOURCE?'Source '+FORCED_SOURCE:'auto';
+    var hb=document.getElementById('set-hide-btn');if(hb){hb.textContent=UI_HIDDEN?'ON':'OFF';hb.style.color=UI_HIDDEN?'#0f0':'#aaa';}
+    var tb=document.getElementById('set-test-btn');if(tb){tb.textContent=TEST_MODE?'ON':'OFF';tb.style.color=TEST_MODE?'#0f0':'#aaa';}
+    var br=document.getElementById('set-bright');if(br)br.value=BRIGHTNESS;
+    var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=BRIGHTNESS;
+  }catch(e){console.log('loadSettingsUI error:',e);}}
 
 function saveSetting(key){
   var val,el;
   switch(key){
     case 'cpm':
-      el=document.getElementById('set-cpm'); if(!el) return;
-      val=parseFloat(el.value); if(isNaN(val)||val<=0) return;
-      FLOOR_CPM=val;
-      try{localStorage.setItem('curb_cpm',val);}catch(e){}
-      var cc=document.getElementById('set-cpm-cur'); if(cc) cc.textContent='$'+val.toFixed(2);
-      var sf=document.getElementById('s-floor'); if(sf) sf.textContent='$'+val.toFixed(2);
-      log('CPM set to $'+val.toFixed(2),'ok');
-      break;
+      el=document.getElementById('set-cpm');if(!el)return;
+      val=parseFloat(el.value);if(isNaN(val)||val<=0)return;
+      FLOOR_CPM=val;try{localStorage.setItem('curb_cpm',val);}catch(e){}
+      var cc=document.getElementById('set-cpm-cur');if(cc)cc.textContent='$'+val.toFixed(2);
+      var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+val.toFixed(2);
+      log('CPM set to $'+val.toFixed(2),'ok');break;
     case 'interval':
-      el=document.getElementById('set-interval'); if(!el) return;
-      val=parseInt(el.value); if(isNaN(val)||val<5) return;
-      INTERVAL=val*1000;
-      try{localStorage.setItem('curb_interval',val);}catch(e){}
-      var ic=document.getElementById('set-interval-cur'); if(ic) ic.textContent=val+'s';
-      log('Ad interval set to '+val+'s','ok');
-      break;
+      el=document.getElementById('set-interval');if(!el)return;
+      val=parseInt(el.value);if(isNaN(val)||val<5)return;
+      INTERVAL=val*1000;try{localStorage.setItem('curb_interval',val);}catch(e){}
+      var ic=document.getElementById('set-interval-cur');if(ic)ic.textContent=val+'s';
+      log('Ad interval set to '+val+'s','ok');break;
     case 'hb':
-      el=document.getElementById('set-hb'); if(!el) return;
-      val=parseInt(el.value); if(isNaN(val)||val<10) return;
-      HB_INTERVAL_MS=val*1000;
-      try{localStorage.setItem('curb_hb',val);}catch(e){}
-      var hc=document.getElementById('set-hb-cur'); if(hc) hc.textContent=val+'s (restart required)';
-      log('HB interval set to '+val+'s (restart to apply)','ok');
-      break;
+      el=document.getElementById('set-hb');if(!el)return;
+      val=parseInt(el.value);if(isNaN(val)||val<10)return;
+      HB_INTERVAL_MS=val*1000;try{localStorage.setItem('curb_hb',val);}catch(e){}
+      var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=val+'s (restart required)';
+      log('HB interval set to '+val+'s (restart to apply)','ok');break;
     case 'timeout':
-      el=document.getElementById('set-timeout'); if(!el) return;
-      val=parseInt(el.value); if(isNaN(val)||val<3) return;
-      WATERFALL_TIMEOUT=val*1000;
-      try{localStorage.setItem('curb_timeout',val);}catch(e){}
-      var tc=document.getElementById('set-timeout-cur'); if(tc) tc.textContent=val+'s';
-      log('Waterfall timeout set to '+val+'s','ok');
-      break;
+      el=document.getElementById('set-timeout');if(!el)return;
+      val=parseInt(el.value);if(isNaN(val)||val<3)return;
+      WATERFALL_TIMEOUT=val*1000;try{localStorage.setItem('curb_timeout',val);}catch(e){}
+      var tc=document.getElementById('set-timeout-cur');if(tc)tc.textContent=val+'s';
+      log('Waterfall timeout set to '+val+'s','ok');break;
     case 'did':
-      el=document.getElementById('set-did'); if(!el) return;
-      val=el.value.trim(); if(!val) return;
-      DEVICE_ID=val;
-      HB_URL='https://api.trillboards.com/v1/partner/device/'+val+'/heartbeat';
+      el=document.getElementById('set-did');if(!el)return;
+      val=el.value.trim();if(!val)return;
+      DEVICE_ID=val;HB_URL='https://api.trillboards.com/v1/partner/device/'+val+'/heartbeat';
       try{localStorage.setItem('curb_did',val);}catch(e){}
-      var dc=document.getElementById('set-did-cur'); if(dc) dc.textContent=val;
-      log('Device ID set to '+val,'ok');
-      break;
+      var dc=document.getElementById('set-did-cur');if(dc)dc.textContent=val;
+      log('Device ID set to '+val,'ok');break;
     case 'sid':
-      el=document.getElementById('set-sid'); if(!el) return;
-      val=el.value.trim(); if(!val) return;
-      SCREEN_ID=val;
-      try{localStorage.setItem('curb_sid',val);}catch(e){}
-      var sc=document.getElementById('set-sid-cur'); if(sc) sc.textContent=val;
-      log('Screen ID set to '+val,'ok');
-      break;
+      el=document.getElementById('set-sid');if(!el)return;
+      val=el.value.trim();if(!val)return;
+      SCREEN_ID=val;try{localStorage.setItem('curb_sid',val);}catch(e){}
+      var sc=document.getElementById('set-sid-cur');if(sc)sc.textContent=val;
+      log('Screen ID set to '+val,'ok');break;
     case 'key':
-      el=document.getElementById('set-key'); if(!el) return;
-      val=el.value.trim(); if(!val) return;
-      HB_KEY=val; API_KEY=val;
-      try{localStorage.setItem('curb_key',val);}catch(e){}
-      log('API key updated','ok');
-      break;
+      el=document.getElementById('set-key');if(!el)return;
+      val=el.value.trim();if(!val)return;
+      HB_KEY=val;API_KEY=val;try{localStorage.setItem('curb_key',val);}catch(e){}
+      log('API key updated','ok');break;
     case 'force':
-      el=document.getElementById('set-force'); if(!el) return;
-      val=parseInt(el.value)||0;
-      FORCED_SOURCE=val;
+      el=document.getElementById('set-force');if(!el)return;
+      val=parseInt(el.value)||0;FORCED_SOURCE=val;
       try{localStorage.setItem('curb_force',val);}catch(e){}
-      var fc=document.getElementById('set-force-cur'); if(fc) fc.textContent=val?'Source '+val:'auto';
-      log('Force source: '+(val||'auto'),'ok');
-      break;
+      var fc=document.getElementById('set-force-cur');if(fc)fc.textContent=val?'Source '+val:'auto';
+      log('Force source: '+(val||'auto'),'ok');break;
   }
-  flashSaved();
-}
+  flashSaved();}
 
 function flashSaved(){
   var e=document.getElementById('set-saved');
-  if(e){e.style.display='block';setTimeout(function(){e.style.display='none';},2000);}
-}
+  if(e){e.style.display='block';setTimeout(function(){e.style.display='none';},2000);}}
 
 function toggleHideUI(){
-  UI_HIDDEN=!UI_HIDDEN;
-  try{localStorage.setItem('curb_hide_ui',UI_HIDDEN?'1':'0');}catch(e){}
+  UI_HIDDEN=!UI_HIDDEN;try{localStorage.setItem('curb_hide_ui',UI_HIDDEN?'1':'0');}catch(e){}
   applyHideUI();
   var btn=document.getElementById('set-hide-btn');
   if(btn){btn.textContent=UI_HIDDEN?'ON':'OFF';btn.style.color=UI_HIDDEN?'#0f0':'#aaa';}
-  // If hiding, also close settings
-  if(UI_HIDDEN) toggleSettings();
-  log('UI buttons '+(UI_HIDDEN?'hidden':'visible'),'ok');
-}
+  if(UI_HIDDEN)toggleSettings();
+  log('UI buttons '+(UI_HIDDEN?'hidden':'visible'),'ok');}
 
 function applyHideUI(){
-  var els=['btn-stats','btn-pixels','btn-set'];
-  els.forEach(function(id){
-    var e=document.getElementById(id);
-    if(e) e.style.display=UI_HIDDEN?'none':'block';
-  });
+  var els=['btn-stats','btn-pixels','btn-set','btn-data'];
+  els.forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=UI_HIDDEN?'none':'block';});
   if(UI_HIDDEN){
-    // 5-tap restore in top-left corner
     var tapCount=0,tapTimer=null;
     document.addEventListener('touchstart',function handler(e){
       if(e.touches[0].clientX<80&&e.touches[0].clientY<80){
-        tapCount++;
-        clearTimeout(tapTimer);
+        tapCount++;clearTimeout(tapTimer);
         tapTimer=setTimeout(function(){tapCount=0;},2000);
-        if(tapCount>=5){
-          UI_HIDDEN=false;
-          try{localStorage.setItem('curb_hide_ui','0');}catch(err){}
-          applyHideUI();
-          document.removeEventListener('touchstart',handler);
-        }
-      }
-    });
-  }
-}
+        if(tapCount>=5){UI_HIDDEN=false;try{localStorage.setItem('curb_hide_ui','0');}catch(err){}
+          applyHideUI();document.removeEventListener('touchstart',handler);}}});}}
 
 function setFontSize(val){
-  FONT_SIZE=parseInt(val);
-  try{localStorage.setItem('curb_font',val);}catch(e){}
-  // Apply to all panels
-  var panels=['stats-panel','pixel-panel'];
-  panels.forEach(function(id){
-    var p=document.getElementById(id);
-    if(p) p.style.fontSize=val+'px';
-  });
-  var fv=document.getElementById('set-font-val'); if(fv) fv.textContent=val;
-}
+  FONT_SIZE=parseInt(val);try{localStorage.setItem('curb_font',val);}catch(e){}
+  ['stats-panel','pixel-panel'].forEach(function(id){var p=document.getElementById(id);if(p)p.style.fontSize=val+'px';});
+  var fv=document.getElementById('set-font-val');if(fv)fv.textContent=val;}
+
 function setBrightness(val){
-  BRIGHTNESS=parseInt(val);
-  try{localStorage.setItem('curb_bright',val);}catch(e){}
+  BRIGHTNESS=parseInt(val);try{localStorage.setItem('curb_bright',val);}catch(e){}
   document.body.style.filter='brightness('+val+'%)';
-  var bv=document.getElementById('set-bright-val'); if(bv) bv.textContent=val;
-}
+  var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=val;}
 
 function toggleTestMode(){
-  TEST_MODE=!TEST_MODE;
-  try{localStorage.setItem('curb_test',TEST_MODE?'1':'0');}catch(e){}
+  TEST_MODE=!TEST_MODE;try{localStorage.setItem('curb_test',TEST_MODE?'1':'0');}catch(e){}
   var btn=document.getElementById('set-test-btn');
   if(btn){btn.textContent=TEST_MODE?'ON':'OFF';btn.style.color=TEST_MODE?'#0f0':'#aaa';}
-  log('Test mode '+(TEST_MODE?'ON':'OFF'),'ok');
-}
+  log('Test mode '+(TEST_MODE?'ON':'OFF'),'ok');}
 
 function clearStats(){
   S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};
   srcStats={};pixEv=[];pixDest={};logs=[];
   updStats();rendEv();rendLog();rendLF();
-  log('Stats cleared','ok');
-  flashSaved();
-}
+  log('Stats cleared','ok');flashSaved();}
 
-function reloadSources(){
-  toggleSettings();
-  log('Reloading waterfall sources...','info');
-  fetchSources();
-}
-
-// Legacy saveCPM kept for compatibility
-function saveCPM(){ saveSetting('cpm'); }
-
+function reloadSources(){toggleSettings();log('Reloading waterfall sources...','info');fetchSources();}
+function saveCPM(){saveSetting('cpm');}
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
 function togglePixels(){var p=document.getElementById('pixel-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshPP()}
 
@@ -966,44 +868,45 @@ function onLoaded(event){
     srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;
     playing=true;adT0=Date.now();
     var durSec=(ad&&ad.getDuration)?Math.round(ad.getDuration()):0;
-    if(durSec>0){ trackBytes('video','video',durSec*50000); DU.adDurs.push(durSec); }setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);updStats();
+    if(durSec>0){trackBytes('video','video',durSec*50000);DU.adDurs.push(durSec);}
+    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);updStats();
     if(ad)dumpAdMeta(ad);
   },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
-    S.imp++;S.rev+=FLOOR_CPM/1000;addEv('imp','IMPRESSION FIRED - '+s.name,'');updStats();
-    var adid=ad?ad.getAdId():'';if(!adid){var am=adMeta.find(function(m){return m.k==='Ad ID';});adid=am?am.v:'unknown';}
-    var aid=ad?ad.getDealId():'';var dur=ad?Math.round(ad.getDuration()):0;
-    sendImpression(adid,aid,dur,false);},false);
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
+    var adid=(ad&&ad.getAdId&&ad.getAdId())||'unknown';
+    var aid=(ad&&ad.getDealId&&ad.getDealId())||'';
+    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration()):0;
+    S.imp++;updStats();
+    addEv('imp','IMPRESSION FIRED - '+s.name,'');
+    sendImpression(adid,aid,dur,false);
+  },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){addEv('q','75% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    var adid=ad?ad.getAdId():'';if(!adid){var am=adMeta.find(function(m){return m.k==='Ad ID';});adid=am?am.v:'unknown';}
-    var aid=ad?ad.getDealId():'';var dur=ad?Math.round(ad.getDuration()):0;
+    var adid=(ad&&ad.getAdId&&ad.getAdId())||'unknown';
+    var aid=(ad&&ad.getDealId&&ad.getDealId())||'';
+    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration()):0;
     sendImpression(adid,aid,dur,true);
-
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
-    log('COMPLETE - '+s.name+' - '+p,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;updStats()},false);
+    log('COMPLETE - '+s.name+' - '+p,'ok');
+    addEv('done','COMPLETE - '+s.name+' - '+p,'');
+    S.done++;playing=false;updStats();
+  },false);
   try{
     var rs=new google.ima.AdsRenderingSettings();
-    rs.uiElements=[];
-    rs.skipDelay=-1;
-    rs.disableUi=true;
+    rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     adsManager.updateAdsRenderingSettings(rs);
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
-    // Force hide skip and pause via CSS
     setTimeout(function(){
       var style=document.createElement('style');
       style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}'+
-        '.ima-controls-div{display:none!important;}'+
-        '.ima-mute-button{display:none!important;}'+
-        '.ima-pause-button{display:none!important;}'+
-        '[class*="skip"]{display:none!important;}'+
-        '[class*="pause"]{display:none!important;}'+
-        '[id*="skip"]{display:none!important;}';
+        '.ima-controls-div{display:none!important;}'+'.ima-mute-button{display:none!important;}'+
+        '.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}'+
+        '[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';
       document.head.appendChild(style);
     },500);
     idx=0
@@ -1029,24 +932,26 @@ document.addEventListener('click',function(e){
   if(!playing&&adsManager)adsManager.start()});
 
 window.addEventListener('load',function(){
-  // Load all settings from localStorage
   try{
     var sc=function(k,def){try{return localStorage.getItem(k);}catch(e){return def;}};
-    var cv=parseFloat(sc('curb_cpm')); if(!isNaN(cv)&&cv>0){ FLOOR_CPM=cv; var sf=document.getElementById('s-floor'); if(sf) sf.textContent='$'+cv.toFixed(2); }
-    var iv=parseInt(sc('curb_interval')); if(!isNaN(iv)&&iv>=5) INTERVAL=iv*1000;
-    var hv=parseInt(sc('curb_hb')); if(!isNaN(hv)&&hv>=10) HB_INTERVAL_MS=hv*1000;
-    var tv=parseInt(sc('curb_timeout')); if(!isNaN(tv)&&tv>=3) WATERFALL_TIMEOUT=tv*1000;
-    var dv=sc('curb_did'); if(dv&&dv.trim()){ DEVICE_ID=dv.trim(); HB_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/heartbeat'; }
-    var sv=sc('curb_sid'); if(sv&&sv.trim()) SCREEN_ID=sv.trim();
-    var kv=sc('curb_key'); if(kv&&kv.trim()){ HB_KEY=kv.trim(); API_KEY=kv.trim(); }
-    var fv=parseInt(sc('curb_force')); if(!isNaN(fv)) FORCED_SOURCE=fv;
-    var uv=sc('curb_hide_ui'); if(uv==='1'){ UI_HIDDEN=true; applyHideUI(); }
-    var bv=parseInt(sc('curb_bright')); if(!isNaN(bv)){ BRIGHTNESS=bv; document.body.style.filter='brightness('+bv+'%)'; }
-    var tsv=sc('curb_test'); if(tsv==='1') TEST_MODE=true;
-    var ffv=parseInt(sc('curb_font')); if(!isNaN(ffv)&&ffv>=8&&ffv<=18){ FONT_SIZE=ffv; setFontSize(ffv); }
+    var cv=parseFloat(sc('curb_cpm'));if(!isNaN(cv)&&cv>0){FLOOR_CPM=cv;var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+cv.toFixed(2);}
+    var iv=parseInt(sc('curb_interval'));if(!isNaN(iv)&&iv>=5)INTERVAL=iv*1000;
+    var hv=parseInt(sc('curb_hb'));if(!isNaN(hv)&&hv>=10)HB_INTERVAL_MS=hv*1000;
+    var tv=parseInt(sc('curb_timeout'));if(!isNaN(tv)&&tv>=3)WATERFALL_TIMEOUT=tv*1000;
+    var dv=sc('curb_did');if(dv&&dv.trim()){DEVICE_ID=dv.trim();HB_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/heartbeat';}
+    var sv=sc('curb_sid');if(sv&&sv.trim())SCREEN_ID=sv.trim();
+    var kv=sc('curb_key');if(kv&&kv.trim()){HB_KEY=kv.trim();API_KEY=kv.trim();}
+    var fv=parseInt(sc('curb_force'));if(!isNaN(fv))FORCED_SOURCE=fv;
+    var uv=sc('curb_hide_ui');if(uv==='1'){UI_HIDDEN=true;applyHideUI();}
+    var bv=parseInt(sc('curb_bright'));if(!isNaN(bv)){BRIGHTNESS=bv;document.body.style.filter='brightness('+bv+'%)';}
+    var tsv=sc('curb_test');if(tsv==='1')TEST_MODE=true;
+    var ffv=parseInt(sc('curb_font'));if(!isNaN(ffv)&&ffv>=8&&ffv<=18){FONT_SIZE=ffv;setFontSize(ffv);}
     log('Settings loaded from storage','info');
-  }catch(e){ log('Settings load error: '+e.message,'warn'); }
-  log('IMA: '+typeof google,'ok');fetchSources();sendHeartbeat();setInterval(sendHeartbeat,HB_INTERVAL_MS);
+  }catch(e){log('Settings load error: '+e.message,'warn');}
+  log('IMA: '+typeof google,'ok');
+  fetchSources();
+  sendHeartbeat();
+  setInterval(sendHeartbeat,HB_INTERVAL_MS);
 });
 </script>
 </body>
