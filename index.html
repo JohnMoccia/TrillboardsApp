@@ -342,9 +342,47 @@ var DU={bytes:0,reqs:0,video:0,vast:0,pixels:0,hb:0,imp:0,api:0,adDurs:[],t0:Dat
 var srcStats={},pixEv=[],pixDest={},logs=[],vastPixels=[],adMeta=[],adMetaTs='',S_hbOk=0,S_hbFail=0;
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
-var COMPLETE_URL='https://api.trillboards.com/v1/partner/impression/complete';
 var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
 var IMP_URL='https://api.trillboards.com/v1/partner/impression';
+
+// ── Ad identity cache ─────────────────────────────────────────────────────────
+// Populated during STARTED so COMPLETE can always send the right IDs even if
+// getCurrentAd() returns null by the time the event fires.
+var cachedAdId='';
+var cachedAid='';
+var cachedDur=0;
+
+function cacheAdInfo(ad){
+  if(!ad)return;
+  try{cachedAdId=(ad.getAdId&&ad.getAdId())||'';}catch(e){}
+  try{cachedAid=(ad.getDealId&&ad.getDealId())||'';}catch(e){}
+  try{cachedDur=(ad.getDuration)?Math.round(ad.getDuration()):0;}catch(e){}
+}
+
+// Resolve ad info: try getCurrentAd() first, fall back to cache.
+// If both are empty, poll up to maxTries x 100ms then send whatever we have.
+function resolveAdAndSend(completed,maxTries){
+  maxTries=maxTries||10;
+  function attempt(tries){
+    var ad=null;
+    try{ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;}catch(e){}
+    if(ad){
+      cacheAdInfo(ad); // refresh cache while we still have it
+    }
+    var adid=cachedAdId||'unknown';
+    var aid=cachedAid||'';
+    var dur=cachedDur||0;
+    if(adid==='unknown'&&tries<maxTries){
+      log('resolveAd: no id yet, retry '+(tries+1)+'/'+maxTries,'warn');
+      setTimeout(function(){attempt(tries+1);},100);
+      return;
+    }
+    if(tries>0)log('resolveAd: resolved after '+tries+' retries: '+adid,'ok');
+    sendImpression(adid,aid,dur,completed);
+  }
+  attempt(0);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 var oOpen=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,url){this._u=url;return oOpen.apply(this,arguments)};
@@ -378,7 +416,8 @@ function ptype(u){
 function pparams(u){try{var o=new URL(u),p={};o.searchParams.forEach(function(v,k){p[k]=v});return{d:o.hostname,path:o.pathname,p:p}}catch(e){return{d:'',path:'',p:{}}}}
 
 function onReq(u){
-  if(!skip(u)&&isPix(u)) trackBytes(u,'pixel',150);if(skip(u)||!isPix(u))return;
+  if(!skip(u)&&isPix(u))trackBytes(u,'pixel',150);
+  if(skip(u)||!isPix(u))return;
   var d=dom(u);
   if(!pixDest[d])pixDest[d]={type:ptype(u),count:0,ok:0,dead:0,last:'',urls:[],test:u.indexOf('/test/')>=0};
   var dest=pixDest[d];dest.count++;dest.last=new Date().toTimeString().substring(0,8);
@@ -519,35 +558,23 @@ function switchTab(t){
   document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
   document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
 
-function generateId(){
-  return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);}
+function generateId(){return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);}
 
 function sendImpression(adid,aid,duration,completed){
   var impid=generateId();
   var params=new URLSearchParams({
-    adid: adid||'unknown',
-    impid: impid,
-    did: DEVICE_ID,
-    sid: SCREEN_ID,
-    aid: aid||'',
-    duration: duration||0,
-    completed: completed?'true':'false',
-    display_mode: 'fullscreen',
-    display_area_ratio: '1.0'
+    adid:adid||'unknown',impid:impid,did:DEVICE_ID,sid:SCREEN_ID,
+    aid:aid||'',duration:duration||0,completed:completed?'true':'false',
+    display_mode:'fullscreen',display_area_ratio:'1.0'
   });
   fetch(IMP_URL+'?'+params.toString(),{
     method:'POST',
-    headers:{
-      'Authorization':'Bearer '+HB_KEY,
-      'Content-Type':'application/json'
-    }
+    headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'}
   }).then(function(r){
     trackBytes('imp','imp',512);
     log('Impression POST OK ('+r.status+') completed:'+completed+' adid:'+adid,'ok');
-    addEv('imp','IMP '+(completed?'COMPLETE':'START')+' → TRILLBOARDS: '+(adid||'unknown'),'');
-  }).catch(function(e){
-    log('Impression POST FAIL: '+e.message,'err');
-  });
+    addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 TRILLBOARDS: '+(adid||'unknown'),'');
+  }).catch(function(e){log('Impression POST FAIL: '+e.message,'err');});
 }
 
 function sendHeartbeat(){
@@ -572,15 +599,15 @@ function dumpAdMeta(ad){
   adMeta=info;adMetaTs=ts;
   log('Ad meta: '+info.length+' fields','ok');
   var src=sources[idx]||sources[0];
-  if(src&&src.vast_url) fetchVastPixels(src.vast_url);
+  if(src&&src.vast_url)fetchVastPixels(src.vast_url);
 }
 
 function fetchVastPixels(vastUrl){
   log('Fetching VAST XML...','info');trackBytes('vast','vast',800);
   var xhr=new XMLHttpRequest();
   xhr.open('GET',vastUrl,true);
-  xhr.onload=function(){ if(xhr.status>=200&&xhr.status<400){ parseVastPixels(xhr.responseText); } else { log('VAST fetch failed: '+xhr.status,'warn'); } };
-  xhr.onerror=function(){ log('VAST fetch error','warn'); };
+  xhr.onload=function(){if(xhr.status>=200&&xhr.status<400){parseVastPixels(xhr.responseText);}else{log('VAST fetch failed: '+xhr.status,'warn');}};
+  xhr.onerror=function(){log('VAST fetch error','warn');};
   xhr.send();
 }
 
@@ -590,9 +617,9 @@ function parseVastPixels(xml){
   tags.forEach(function(tag){
     var re=new RegExp('<'+tag+'[^>]*>\\s*<!\\[CDATA\\[([^\\]]+)\\]\\]>\\s*</'+tag+'>','gi');
     var m;
-    while((m=re.exec(xml))!==null){ var u=m[1].trim(); if(u) urls.push({tag:tag,url:u}); }
+    while((m=re.exec(xml))!==null){var u=m[1].trim();if(u)urls.push({tag:tag,url:u});}
     var re2=new RegExp('<'+tag+'[^>]*>([^<]+)</'+tag+'>','gi');
-    while((m=re2.exec(xml))!==null){ var u=m[1].trim(); if(u&&u.indexOf('http')===0) urls.push({tag:tag,url:u}); }
+    while((m=re2.exec(xml))!==null){var u=m[1].trim();if(u&&u.indexOf('http')===0)urls.push({tag:tag,url:u});}
   });
   log('VAST parsed: '+urls.length+' tracking URLs','ok');
   vastPixels=urls;
@@ -613,18 +640,14 @@ document.addEventListener('DOMContentLoaded',function(){
     blocker.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();},true);
   }
   var ad=document.getElementById('ad-container');
-  if(ad){
-    ad.addEventListener('touchstart',function(e){
-      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'){e.preventDefault();}
-    },{passive:false});
-  }
+  if(ad){ad.addEventListener('touchstart',function(e){if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'){e.preventDefault();}},{passive:false});}
 });
 
 function formatBytes(b){
-  if(b<1024) return b.toFixed(0)+' B';
-  if(b<1048576) return (b/1024).toFixed(2)+' KB';
-  if(b<1073741824) return (b/1048576).toFixed(2)+' MB';
-  return (b/1073741824).toFixed(2)+' GB';}
+  if(b<1024)return b.toFixed(0)+' B';
+  if(b<1048576)return(b/1024).toFixed(2)+' KB';
+  if(b<1073741824)return(b/1048576).toFixed(2)+' MB';
+  return(b/1073741824).toFixed(2)+' GB';}
 
 function trackBytes(url,type,bytes){
   DU.bytes+=bytes;DU.reqs++;
@@ -642,23 +665,16 @@ function toggleData(){
   if(!showing)refreshDataPanel();}
 
 function refreshDataPanel(){
-  var s=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
-  s('du-session',formatBytes(DU.bytes));
-  s('du-session-req',DU.reqs+' requests');
+  var stf=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+  stf('du-session',formatBytes(DU.bytes));stf('du-session-req',DU.reqs+' requests');
   var hrs=(Date.now()-DU.t0)/3600000;
   var daily=hrs>0?(DU.bytes/hrs)*24:0;
-  s('du-daily',formatBytes(daily));
-  s('du-monthly',formatBytes(daily*30));
-  s('du-fleet',formatBytes(daily*30*9000));
-  s('du-video',formatBytes(DU.video));
-  s('du-vast',formatBytes(DU.vast));
-  s('du-pixels',formatBytes(DU.pixels));
-  s('du-hb',formatBytes(DU.hb));
-  s('du-imp',formatBytes(DU.imp));
-  s('du-api',formatBytes(DU.api));
+  stf('du-daily',formatBytes(daily));stf('du-monthly',formatBytes(daily*30));stf('du-fleet',formatBytes(daily*30*9000));
+  stf('du-video',formatBytes(DU.video));stf('du-vast',formatBytes(DU.vast));stf('du-pixels',formatBytes(DU.pixels));
+  stf('du-hb',formatBytes(DU.hb));stf('du-imp',formatBytes(DU.imp));stf('du-api',formatBytes(DU.api));
   var avgDur=DU.adDurs.length>0?(DU.adDurs.reduce(function(a,b){return a+b;},0)/DU.adDurs.length).toFixed(0)+'s':'0s';
   var perAd=DU.adDurs.length>0?formatBytes(DU.bytes/DU.adDurs.length):'0 B';
-  s('du-per-ad',perAd);s('du-ads-played',DU.adDurs.length);s('du-avg-dur',avgDur);}
+  stf('du-per-ad',perAd);stf('du-ads-played',DU.adDurs.length);stf('du-avg-dur',avgDur);}
 
 function resetDataUsage(){
   DU={bytes:0,reqs:0,video:0,vast:0,pixels:0,hb:0,imp:0,api:0,adDurs:[],t0:Date.now()};
@@ -714,7 +730,7 @@ function saveSetting(key){
       val=parseInt(el.value);if(isNaN(val)||val<10)return;
       HB_INTERVAL_MS=val*1000;try{localStorage.setItem('curb_hb',val);}catch(e){}
       var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=val+'s (restart required)';
-      log('HB interval set to '+val+'s (restart to apply)','ok');break;
+      log('HB interval set to '+val+'s','ok');break;
     case 'timeout':
       el=document.getElementById('set-timeout');if(!el)return;
       val=parseInt(el.value);if(isNaN(val)||val<3)return;
@@ -748,9 +764,7 @@ function saveSetting(key){
   }
   flashSaved();}
 
-function flashSaved(){
-  var e=document.getElementById('set-saved');
-  if(e){e.style.display='block';setTimeout(function(){e.style.display='none';},2000);}}
+function flashSaved(){var e=document.getElementById('set-saved');if(e){e.style.display='block';setTimeout(function(){e.style.display='none';},2000);}}
 
 function toggleHideUI(){
   UI_HIDDEN=!UI_HIDDEN;try{localStorage.setItem('curb_hide_ui',UI_HIDDEN?'1':'0');}catch(e){}
@@ -761,8 +775,7 @@ function toggleHideUI(){
   log('UI buttons '+(UI_HIDDEN?'hidden':'visible'),'ok');}
 
 function applyHideUI(){
-  var els=['btn-stats','btn-pixels','btn-set','btn-data'];
-  els.forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=UI_HIDDEN?'none':'block';});
+  ['btn-stats','btn-pixels','btn-set'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=UI_HIDDEN?'none':'block';});
   if(UI_HIDDEN){
     var tapCount=0,tapTimer=null;
     document.addEventListener('touchstart',function handler(e){
@@ -795,7 +808,6 @@ function clearStats(){
   log('Stats cleared','ok');flashSaved();}
 
 function reloadSources(){toggleSettings();log('Reloading waterfall sources...','info');fetchSources();}
-function saveCPM(){saveSetting('cpm');}
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
 function togglePixels(){var p=document.getElementById('pixel-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshPP()}
 
@@ -855,46 +867,58 @@ function onLoaded(event){
   adsManager=event.getAdsManager(vid);
   adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
   adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED,onDone,false);
+
   adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
     if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';
-      setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
+      setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}
+  },false);
+
   adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
+    // Cache ad identity immediately — used as fallback by IMPRESSION and COMPLETE
+    cachedAdId='';cachedAid='';cachedDur=0;
+    cacheAdInfo(ad);
     var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';
-    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration())+'s':'?s';
-    log('STARTED - '+s.name+' - '+adv,'ok');
+    var dur=cachedDur?cachedDur+'s':'?s';
+    log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');
     addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
     srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;
     playing=true;adT0=Date.now();
-    var durSec=(ad&&ad.getDuration)?Math.round(ad.getDuration()):0;
-    if(durSec>0){trackBytes('video','video',durSec*50000);DU.adDurs.push(durSec);}
+    if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
     setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);updStats();
     if(ad)dumpAdMeta(ad);
   },false);
+
+  // IMPRESSION: getCurrentAd() usually works here; cache is backup
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
+    S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    var adid=(ad&&ad.getAdId&&ad.getAdId())||'unknown';
-    var aid=(ad&&ad.getDealId&&ad.getDealId())||'';
-    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration()):0;
-    S.imp++;updStats();
-    addEv('imp','IMPRESSION FIRED - '+s.name,'');
+    if(ad)cacheAdInfo(ad); // refresh cache while available
+    var adid=cachedAdId||'unknown';
+    var aid=cachedAid||'';
+    var dur=cachedDur||0;
     sendImpression(adid,aid,dur,false);
   },false);
+
   adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){addEv('q','75% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
+  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){
+    // Last safe moment to refresh cache before COMPLETE fires
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    var adid=(ad&&ad.getAdId&&ad.getAdId())||'unknown';
-    var aid=(ad&&ad.getDealId&&ad.getDealId())||'';
-    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration()):0;
-    sendImpression(adid,aid,dur,true);
+    if(ad)cacheAdInfo(ad);
+    addEv('q','75% - '+s.name,'');
+  },false);
+
+  // COMPLETE: ad object is often null here — use resolveAdAndSend with retry
+  adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p,'ok');
     addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;playing=false;updStats();
+    S.done++;updStats();
+    resolveAdAndSend(true,10); // retry up to 10x100ms if getCurrentAd() is null
   },false);
+
   try{
     var rs=new google.ima.AdsRenderingSettings();
     rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
@@ -904,12 +928,12 @@ function onLoaded(event){
     setTimeout(function(){
       var style=document.createElement('style');
       style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}'+
-        '.ima-controls-div{display:none!important;}'+'.ima-mute-button{display:none!important;}'+
+        '.ima-controls-div{display:none!important;}.ima-mute-button{display:none!important;}'+
         '.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}'+
         '[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';
       document.head.appendChild(style);
     },500);
-    idx=0
+    idx=0;
   }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
 
 function onErr(event){
@@ -933,7 +957,7 @@ document.addEventListener('click',function(e){
 
 window.addEventListener('load',function(){
   try{
-    var sc=function(k,def){try{return localStorage.getItem(k);}catch(e){return def;}};
+    var sc=function(k){try{return localStorage.getItem(k);}catch(e){return null;}};
     var cv=parseFloat(sc('curb_cpm'));if(!isNaN(cv)&&cv>0){FLOOR_CPM=cv;var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+cv.toFixed(2);}
     var iv=parseInt(sc('curb_interval'));if(!isNaN(iv)&&iv>=5)INTERVAL=iv*1000;
     var hv=parseInt(sc('curb_hb'));if(!isNaN(hv)&&hv>=10)HB_INTERVAL_MS=hv*1000;
