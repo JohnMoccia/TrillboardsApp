@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+<script src="https://imasdk.googleapis.com/js/sdkloader/ima3.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:monospace}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+#ad-container{position:fixed;top:0;left:0;width:100%;height:100%}
+#content-video{position:absolute;top:0;left:0;width:100%;height:100%}
+#ad-display{position:absolute;top:0;left:0;width:100%;height:100%}
+#btn-stats{position:fixed;top:10px;right:10px;z-index:9999;background:rgba(0,255,100,.15);border:1px solid #0f0;color:#0f0;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px;display:block}
+#btn-pixels{position:fixed;top:46px;right:10px;z-index:9999;background:rgba(255,140,0,.15);border:1px solid #f80;color:#f80;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px;display:block}
+#stats-panel{display:none;position:fixed;top:0;right:0;width:320px;height:100%;background:rgba(0,0,0,.96);border-left:1px solid #1a1a1a;z-index:9998;overflow-y:auto;padding:10px;font-size:11px;color:#ccc}
+#stats-panel.open{display:block}
+#pixel-panel{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:10000;overflow-y:auto;padding:14px;font-size:11px;color:#ccc}
+#pixel-panel.open{display:block}
+.ptitle{color:#0f0;font-size:13px;font-weight:bold;border-bottom:1px solid #1a3a1a;padding-bottom:6px;margin-bottom:8px;letter-spacing:2px}
+.uptime{color:#4af;font-size:10px;text-align:right;margin-bottom:6px}
+.sec{margin-bottom:10px}
+.sec-t{color:#555;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;border-bottom:1px solid #111;padding-bottom:2px}
+.sr{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #0a0a0a}
+.sl{color:#555}.sv{color:#fff;font-weight:bold}
+.green{color:#0f0!important}.yellow{color:#ff0!important}.red{color:#f44!important}.blue{color:#4af!important}.orange{color:#f80!important}
+#now-playing{background:#001500;border:1px solid #0a3a0a;border-radius:4px;padding:8px;margin-bottom:8px;text-align:center}
+.nps{color:#0f0;font-size:13px;font-weight:bold}.npd{color:#666;font-size:10px;margin-top:2px}
+.srow{padding:4px 6px;margin:2px 0;border-radius:3px;border-left:3px solid #222;background:#080808}
+.srow.active{border-left-color:#0f0;background:#001500}
+.srow.filled{border-left-color:#4af;background:#001018}
+.srow.trying{border-left-color:#ff0;background:#111000}
+.srow.errored{border-left-color:#f44;background:#100000}
+.sname{color:#ddd;font-size:11px;font-weight:bold}.sstats{color:#555;font-size:9px;margin-top:1px}
+.badge{display:inline-block;padding:1px 4px;border-radius:2px;font-size:9px;margin-left:4px;font-weight:bold}
+.b-live{background:#0f0;color:#000}.b-try{background:#ff0;color:#000}.b-fill{background:#4af;color:#000}.b-err{background:#f44;color:#fff}
+.scrollbox{overflow-y:auto;background:#030303;border:1px solid #111;border-radius:3px;padding:4px}
+.evrow{padding:2px 3px;margin:1px 0;font-size:10px;border-left:2px solid #222;line-height:1.3}
+.evrow.imp{border-left-color:#0f0;color:#0b0}.evrow.start{border-left-color:#4af;color:#4af}
+.evrow.q{border-left-color:#ff0;color:#990}.evrow.done{border-left-color:#f80;color:#f80}
+.evrow.err{border-left-color:#f44;color:#f44}.evrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
+.logrow{font-size:10px;padding:1px 2px}
+.logrow.info{color:#4af}.logrow.ok{color:#0f0}.logrow.warn{color:#ff0}.logrow.err{color:#f44}.logrow.dim{color:#444}
+.ts{color:#333;margin-right:4px}
+.tabs{display:flex;margin-bottom:4px}
+.tab{flex:1;text-align:center;padding:4px;font-size:10px;cursor:pointer;border:1px solid #222;color:#555}
+.tab.active{border-color:#0f0;color:#0f0;background:#001500}
+.pxhdr{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1a0a00;padding-bottom:8px;margin-bottom:12px}
+.pxtitle{color:#f80;font-size:14px;font-weight:bold;letter-spacing:2px}
+.pxclose{cursor:pointer;color:#555;font-size:22px;padding:0 8px}
+.pp-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.pp-card{background:#080808;border:1px solid #1a1a1a;border-radius:4px;padding:8px;text-align:center}
+.pp-card-t{color:#555;font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.pp-card-v{font-size:22px;font-weight:bold;color:#fff}
+.pp-sec{margin-bottom:14px}
+.pp-sec-t{color:#f80;font-size:10px;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid #1a0a00;padding-bottom:4px;margin-bottom:8px}
+.dcard{background:#080808;border:1px solid #1a1a1a;border-radius:4px;padding:10px;margin-bottom:8px;cursor:pointer}
+.dname{color:#fff;font-weight:bold;font-size:12px}.ddomain{color:#444;font-size:10px;margin-top:2px}
+.dbadges{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.dbadge{padding:3px 8px;border-radius:3px;font-size:10px;font-weight:bold}
+.db-ok{background:#0f0;color:#000}.db-dead{background:#f44;color:#fff}.db-test{background:#f80;color:#000}.db-prod{background:#4af;color:#000}
+.ddetail{background:#030303;border-radius:4px;padding:8px;margin-top:8px;font-size:10px;display:none}
+.ddetail.open{display:block}
+.dd-sec{color:#f80;font-size:9px;letter-spacing:1px;text-transform:uppercase;margin:8px 0 4px}
+.ddrow{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #0a0a0a;padding:3px 0}
+.ddk{color:#555;flex-shrink:0;margin-right:8px}.ddv{color:#aaa;word-break:break-all;text-align:right;font-size:10px}
+.dd-url{color:#333;font-size:9px;word-break:break-all;margin-top:6px;padding:4px;background:#000;border-radius:2px}
+.lf{max-height:280px;overflow-y:auto;background:#030303;border:1px solid #111;border-radius:4px;padding:6px}
+.lfrow{padding:3px 4px;margin:1px 0;font-size:10px;border-left:3px solid #222;line-height:1.4}
+.lfrow.imp{border-left-color:#0f0;color:#0b0}.lfrow.start{border-left-color:#4af;color:#4af}
+.lfrow.q{border-left-color:#ff0;color:#990}.lfrow.done{border-left-color:#f80;color:#f80}
+.lfrow.err{border-left-color:#f44;color:#f44}.lfrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
+.lfdest{color:#333;font-size:9px;margin-top:1px;word-break:break-all}
+</style>
+</head>
+<body>
+<div id="ad-container">
+  <video id="content-video" playsinline muted></video>
+  <div id="ad-display"></div>
+</div>
+<button id="btn-stats" onclick="toggleStats()">STATS</button>
+<button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
+<div id="stats-panel">
+  <div class="ptitle">CURB AD MONITOR</div>
+  <div class="uptime" id="uptime">UP: 00:00:00</div>
+  <div id="now-playing"><div class="nps" id="nps">INITIALIZING...</div><div class="npd" id="npd">Starting up</div></div>
+  <div class="sec"><div class="sec-t">Session Stats</div>
+    <div class="sr"><span class="sl">Total Requests</span><span class="sv" id="s-req">0</span></div>
+    <div class="sr"><span class="sl">Fills</span><span class="sv green" id="s-fills">0</span></div>
+    <div class="sr"><span class="sl">Errors / No Fill</span><span class="sv red" id="s-err">0</span></div>
+    <div class="sr"><span class="sl">Fill Rate</span><span class="sv" id="s-rate">0%</span></div>
+    <div class="sr"><span class="sl">Ads Completed</span><span class="sv blue" id="s-done">0</span></div>
+    <div class="sr"><span class="sl">Impressions Fired</span><span class="sv green" id="s-imp">0</span></div>
+    <div class="sr"><span class="sl">Pixels Dead</span><span class="sv" id="s-dead">0</span></div>
+    <div class="sr"><span class="sl">Last Fill Source</span><span class="sv blue" id="s-src">-</span></div>
+    <div class="sr"><span class="sl">Last Advertiser</span><span class="sv" id="s-adv">-</span></div>
+    <div class="sr"><span class="sl">Floor CPM</span><span class="sv orange">$8.69</span></div>
+    <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
+  </div>
+  <div class="sec"><div class="sec-t">Waterfall Sources</div><div id="source-list"></div></div>
+  <div class="sec"><div class="sec-t">Events</div>
+    <div class="tabs"><div class="tab active" onclick="switchTab('ev')">EVENTS</div><div class="tab" onclick="switchTab('lg')">LOG</div></div>
+    <div id="tab-ev" class="scrollbox" style="max-height:200px"></div>
+    <div id="tab-lg" class="scrollbox" style="max-height:200px;display:none"></div>
+  </div>
+</div>
+<div id="pixel-panel">
+  <div class="pxhdr"><span class="pxtitle">TRACKING PIXEL MONITOR</span><span class="pxclose" onclick="togglePixels()">X</span></div>
+  <div class="pp-grid">
+    <div class="pp-card"><div class="pp-card-t">Pixels Fired</div><div class="pp-card-v green" id="pp-fired">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Dead Pixels</div><div class="pp-card-v" id="pp-dead">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Destinations</div><div class="pp-card-v orange" id="pp-dests">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Billing</div><div class="pp-card-v" id="pp-billing">?</div></div>
+  </div>
+  <div class="pp-sec"><div class="pp-sec-t">Destinations - tap each card to see what data is collected</div><div id="pp-dest-list"><div style="color:#444;padding:12px;text-align:center">No pixel traffic yet - wait for an ad to play</div></div></div>
+  <div class="pp-sec"><div class="pp-sec-t">Live Pixel Feed</div><div class="lf" id="pp-lf"><div style="color:#444;padding:8px">Waiting for pixel events...</div></div></div>
+</div>
+<script>
+var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
+var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
+var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
+var INTERVAL=10000;
+var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
+var vid=document.getElementById('content-video');
+var adDiv=document.getElementById('ad-display');
+var playing=false,t0=Date.now(),adT0=null,nextTimer=null,cdown=null;
+var S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};
+var srcStats={},pixEv=[],pixDest={},logs=[];
+var oOpen=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(m,url){this._u=url;return oOpen.apply(this,arguments)};
+var oSend=XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.send=function(){
+  if(this._u){var u=this._u,self=this;onReq(u);
+    this.addEventListener('load',function(){onRes(u,self.status)});
+    this.addEventListener('error',function(){onRes(u,0)})}
+  return oSend.apply(this,arguments)};
+var oFetch=window.fetch;
+window.fetch=function(input,opts){
+  var url=typeof input==='string'?input:(input&&input.url?input.url:null);
+  if(url)onReq(url);
+  var p=oFetch.apply(this,arguments);
+  if(url)p.then(function(r){onRes(url,r.status)}).catch(function(){onRes(url,0)});
+  return p};
+function skipUrl(u){if(!u||typeof u!=='string')return true;
+  return u.indexOf('trillboards.com/v1')>=0||u.indexOf('imasdk.googleapis')>=0||u.indexOf('localhost')>=0}
+function isPix(u){return u.indexOf('pixel')>=0||u.indexOf('doubleclick')>=0||u.indexOf('vidverto')>=0||u.indexOf('adipolo')>=0||u.indexOf('aioo')>=0||u.indexOf('voisetech')>=0||u.indexOf('googleads')>=0}
+function dom(u){try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return u.substring(0,40)}}
+function ptype(u){
+  if(u.indexOf('vidverto')>=0)return'Vidverto SSP';
+  if(u.indexOf('xbbe')>=0)return'Google DV360';
+  if(u.indexOf('doubleclick')>=0)return'Google GAM';
+  if(u.indexOf('adipolo')>=0)return'Adipolo SSP';
+  if(u.indexOf('aioo')>=0)return'AIOO';
+  if(u.indexOf('voisetech')>=0)return'Voisetech';
+  return dom(u)}
+function onReq(u){if(skipUrl(u)||!isPix(u))return;
+  var d=dom(u);
+  if(!pixDest[d])pixDest[d]={type:ptype(u),count:0,ok:0,dead:0,last:'',urls:[],test:u.indexOf('/test/')>=0};
+  pixDest[d].count++;pixDest[d].last=new Date().toTimeString().substring(0,8);
+  if(pixDest[d].urls.length<3&&!pixDest[d].urls.some(function(x){return x===u}))pixDest[d].urls.push(u)}
+function onRes(u,status){if(skipUrl(u)||!isPix(u))return;
+  var d=dom(u),ok=status>=200&&status<400;
+  if(pixDest[d]){if(ok)pixDest[d].ok++;else pixDest[d].dead++}
+  if(!ok){S.dead++;addEv('dead','PIXEL DEAD: '+d+' ['+status+']',u);updStats()}}
+function addEv(type,msg,url){var ts=new Date().toTimeString().substring(0,8);
+  pixEv.unshift({type:type,msg:msg,url:url,ts:ts});if(pixEv.length>80)pixEv.pop();rendEv();rendLF()}
+function log(msg,type){type=type||'dim';var ts=new Date().toTimeString().substring(0,8);
+  logs.unshift({msg:msg,type:type,ts:ts});if(logs.length>100)logs.pop();rendLog();console.log('[Curb] '+msg)}
+function st(id,v){var e=document.getElementById(id);if(e)e.textContent=v}
+function setNP(s,d){st('nps',s);st('npd',d)}
+function updStats(){var r=S.req>0?Math.round((S.fills/S.req)*100):0;
+  st('s-req',S.req);st('s-fills',S.fills);st('s-err',S.err);st('s-done',S.done);
+  st('s-imp',S.imp);st('s-dead',S.dead);st('s-src',S.src);st('s-adv',S.adv);
+  var re=document.getElementById('s-rate');
+  if(re){re.textContent=r+'%';re.className='sv '+(r>60?'green':r>30?'yellow':'red')}
+  var de=document.getElementById('s-dead');if(de)de.className='sv '+(S.dead>0?'red':'green');
+  rendSrc()}
+function rendSrc(){var e=document.getElementById('source-list');if(!e||!sources.length)return;
+  e.innerHTML=sources.map(function(s,i){var ss=srcStats[s.name]||{req:0,fills:0,err:0};
+    var rate=ss.req>0?Math.round((ss.fills/ss.req)*100):0;
+    var cls='srow',badge='';
+    if(i===idx&&playing){cls+=' active';badge='<span class="badge b-live">LIVE</span>'}
+    else if(i===idx&&!playing){cls+=' trying';badge='<span class="badge b-try">TRY</span>'}
+    else if(ss.fills>0){cls+=' filled';badge='<span class="badge b-fill">FILL</span>'}
+    else if(ss.err>0&&ss.fills===0){cls+=' errored';badge='<span class="badge b-err">ERR</span>'}
+    return'<div class="'+cls+'"><div class="sname">'+(i+1)+'. '+s.name.toUpperCase()+badge+'</div>'+
+      '<div class="sstats">Req:'+ss.req+' Fill:'+ss.fills+' Err:'+ss.err+
+      ' Rate:<span class="'+(rate>60?'green':rate>30?'yellow':rate>0?'red':'')+'">'+ rate+'%</span></div></div>'
+  }).join('')}
+function rendEv(){var e=document.getElementById('tab-ev');if(!e)return;
+  e.innerHTML=pixEv.slice(0,40).map(function(ev){
+    return'<div class="evrow '+ev.type+'"><span class="ts">'+ev.ts+'</span>'+ev.msg+'</div>'}).join('')}
+function rendLog(){var e=document.getElementById('tab-lg');if(!e)return;
+  e.innerHTML=logs.slice(0,40).map(function(l){
+    return'<div class="logrow '+l.type+'"><span class="ts">'+l.ts+'</span>'+l.msg+'</div>'}).join('')}
+function rendLF(){var e=document.getElementById('pp-lf');if(!e)return;
+  e.innerHTML=pixEv.slice(0,50).map(function(ev){
+    var d=ev.url?'<div class="lfdest">to: '+dom(ev.url)+'</div>':'';
+    return'<div class="lfrow '+ev.type+'"><span style="color:#333">'+ev.ts+'</span> '+ev.msg+d+'</div>'
+  }).join('')||'<div style="color:#444;padding:8px">Waiting...</div>'}
+function paramLabel(k){var L={ppid:'Screen ID sent to advertiser',ifa:'Device hardware ID',iu:'GAM Ad Unit Path',sz:'Ad Size',correlator:'Session dedup ID',npa:'Non-personalized ads',output:'Output format',url:'Page URL referrer',cust_params:'Custom targeting params',schain:'Supply chain verified',vpa:'Autoplay state',vpmute:'Muted state',vpos:'Pre/mid/postroll',uip:'IP address for geo',ua:'User agent browser',city:'City targeting',state:'State targeting',daypart:'Time of day',dow:'Day of week',venuetype:'Venue type transit/taxi',venue_parent:'Venue parent category',venue_child:'Venue subcategory',dooh:'DOOH flag',pzoneid:'Vidverto zone ID',psite:'Vidverto site ID',psid:'Vidverto session',gdpr:'GDPR flag',gdpr_consent:'GDPR consent string',us_privacy:'CCPA string',adid:'Ad creative ID',crid:'Creative ID',imp:'Impression ID',bid:'Bid ID',price:'Winning CPM',w:'Creative width',h:'Creative height'};return L[k]||null}
+function refreshPP(){var testC=Object.keys(pixDest).filter(function(d){return pixDest[d].test}).length;
+  var total=Object.keys(pixDest).length;
+  st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',total);
+  var be=document.getElementById('pp-billing');
+  if(be){if(testC>0){be.textContent='TEST';be.className='pp-card-v red'}
+    else if(total>0){be.textContent='PROD';be.className='pp-card-v green'}
+    else{be.textContent='?';be.className='pp-card-v'}}
+  var dl=document.getElementById('pp-dest-list');if(!dl)return;
+  var doms=Object.keys(pixDest);
+  if(!doms.length){dl.innerHTML='<div style="color:#444;padding:12px;text-align:center">No pixel traffic yet</div>';rendLF();return}
+  dl.innerHTML=doms.map(function(domain){var d=pixDest[domain];
+    var allParams={};
+    d.urls.forEach(function(url){try{var u=new URL(url);
+      u.searchParams.forEach(function(v,k){if(!allParams[k])allParams[k]=v});
+      var cp=u.searchParams.get('cust_params');
+      if(cp){try{decodeURIComponent(cp).split('&').forEach(function(pair){var kv=pair.split('=');
+        if(kv[0]&&!allParams['cp_'+kv[0]])allParams['cp_'+kv[0]]=decodeURIComponent(kv[1]||'')})}catch(e){}}}catch(e){}});
+    var kH='',uH='';
+    Object.keys(allParams).forEach(function(k){var v=allParams[k];var rk=k.replace('cp_','');
+      var label=paramLabel(rk);var dk=k.startsWith('cp_')?'[cust] '+rk:k;
+      var dv=v;try{dv=decodeURIComponent(v)}catch(e){}if(dv.length>90)dv=dv.substring(0,90)+'...';
+      if(label){kH+='<div class="ddrow" style="border-left:2px solid #f80;padding-left:5px"><div style="flex:1;margin-right:6px"><span style="color:#f80;font-weight:bold">'+dk+'</span><div style="color:#666;font-size:9px;margin-top:1px">'+label+'</div></div><span class="ddv" style="color:#fff">'+dv+'</span></div>'}
+      else{uH+='<div class="ddrow"><span class="ddk">'+dk+'</span><span class="ddv">'+dv+'</span></div>'}});
+    var noP=!Object.keys(allParams).length?'<div style="color:#555;padding:4px">Pure tracking pixel - no params</div>':'';
+    return'<div class="dcard" onclick="togDest(this)"><div style="display:flex;justify-content:space-between"><div><div class="dname">'+d.type+'</div><div class="ddomain">'+domain+'</div></div><div style="text-align:right;font-size:10px"><div class="'+(d.dead>0?'red':'green')+'">'+d.ok+' ok / '+d.dead+' dead</div><div style="color:#444">'+d.count+' hits - '+d.last+'</div></div></div><div class="dbadges">'+(d.test?'<span class="dbadge db-test">TEST - NO BILLING</span>':'<span class="dbadge db-prod">PRODUCTION - BILLING</span>')+(d.dead>0?'<span class="dbadge db-dead">'+d.dead+' DEAD</span>':'<span class="dbadge db-ok">ALL OK</span>')+'</div><div class="ddetail">'+(kH?'<div class="dd-sec">Data Being Collected</div>'+kH:'')+(uH?'<div class="dd-sec">Other Params</div>'+uH:'')+noP+(d.urls[0]?'<div class="dd-sec">Full Pixel URL</div><div class="dd-url">'+d.urls[0]+'</div>':'')+'</div></div>'
+  }).join('');rendLF()}
+function togDest(card){var d=card.querySelector('.ddetail');if(d)d.classList.toggle('open')}
+function switchTab(t){document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';
+  document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
+  document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+(['ev','lg'][i]===t?' active':'')})}
+function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
+function togglePixels(){var p=document.getElementById('pixel-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshPP()}
+setInterval(function(){var e=Math.floor((Date.now()-t0)/1000);
+  var h=Math.floor(e/3600),m=Math.floor((e%3600)/60),s=e%60;
+  st('uptime','UP: '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));
+  if(cdown){var left=Math.max(0,Math.ceil((cdown-Date.now())/1000));st('s-next',left>0?left+'s':'now')}
+  if(document.getElementById('pixel-panel').classList.contains('open')){st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',Object.keys(pixDest).length)}
+},1000);
+function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
+function fetchSources(){log('Fetching sources...','info');setNP('FETCHING...','Calling API');
+  fetch(API_URL,{headers:{'Authorization':'Bearer '+API_KEY}})
+  .then(function(r){return r.json()})
+  .then(function(data){
+    if(data.success&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
+      sources=data.data.header_bidding_settings.vast_waterfall.sources;
+      sources.sort(function(a,b){return a.priority-b.priority});
+      sources.forEach(function(s){srcStats[s.name]={req:0,fills:0,err:0}});
+      log('Got '+sources.length+' sources','ok');rendSrc();initIMA()
+    }else{log('No sources - retry','warn');setNP('NO SOURCES','Retrying...');sched(INTERVAL)}
+  }).catch(function(e){log('API error: '+e.message,'err');setNP('API ERROR',e.message);sched(INTERVAL)})}
+function initIMA(){log('IMA ready','ok');
+  adDisplayContainer=new google.ima.AdDisplayContainer(adDiv,vid);
+  adDisplayContainer.initialize();
+  adsLoader=new google.ima.AdsLoader(adDisplayContainer);
+  adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
+  adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
+  idx=0;reqNext()}
+function reqNext(){clearTimeout(nextTimer);cdown=null;st('s-next','-');
+  if(idx>=sources.length){log('All exhausted - waiting','warn');setNP('NO FILL','All sources failed');
+    idx=0;updStats();sched(INTERVAL);return}
+  var s=sources[idx];log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name);
+  srcStats[s.name].req++;S.req++;updStats();
+  var req=new google.ima.AdsRequest();req.adTagUrl=s.vast_url;
+  req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
+  req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
+  try{adsLoader.requestAds(req)}catch(e){log('Threw: '+s.name,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
+function onLoaded(event){var s=sources[idx];log('Loaded: '+s.name,'ok');
+  if(adsManager){try{adsManager.destroy()}catch(e){}}
+  adsManager=event.getAdsManager(vid);
+  adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED,onDone,false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
+    if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';
+      setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
+    var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';
+    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration())+'s':'?s';
+    log('STARTED - '+s.name+' - '+adv,'ok');addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
+    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;
+    playing=true;adT0=Date.now();setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);updStats()},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){S.imp++;addEv('imp','IMPRESSION FIRED - '+s.name,'');updStats()},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){addEv('q','75% - '+s.name,'')},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
+    var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
+    log('COMPLETE - '+s.name+' - '+p,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');S.done++;updStats()},false);
+  try{var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;
+    adsManager.updateAdsRenderingSettings(rs);
+    adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
+    adsManager.start();idx=0}
+  catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
+function onErr(event){var s=sources[idx];
+  var er=event.getError?event.getError().toString():'unknown';
+  log('ERROR - '+(s?s.name:'?')+' - '+er.substring(0,60),'err');addEv('err','ERROR - '+(s?s.name:'?'),'');
+  if(s){srcStats[s.name].err++;S.err++}playing=false;
+  if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
+  idx++;updStats();setTimeout(reqNext,500)}
+function onDone(){log('Cycle done - next in '+INTERVAL/1000+'s','info');
+  playing=false;idx=0;setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
+document.addEventListener('click',function(e){
+  if(e.target.id==='btn-stats'||e.target.id==='btn-pixels')return;
+  if(document.getElementById('pixel-panel').classList.contains('open'))return;
+  if(!playing&&adsManager)adsManager.start()});
+window.addEventListener('load',function(){log('IMA: '+typeof google,'ok');fetchSources()});
+</script>
+</body>
+</html>
+'@
+Set-Content -Path $file -Encoding UTF8 -Value $content
+Write-Host "Done. Size: $((Get-Item $file).Length) bytes"

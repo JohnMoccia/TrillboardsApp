@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+  <script src="https://imasdk.googleapis.com/js/sdkloader/ima3.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:monospace}
+    html,body{width:100%;height:100%;overflow:hidden;background:#000}
+    #ad-container{position:fixed;top:0;left:0;width:100%;height:100%}
+    #content-video{position:absolute;top:0;left:0;width:100%;height:100%}
+    #ad-display{position:absolute;top:0;left:0;width:100%;height:100%}
+    #btn-stats{position:fixed;top:10px;right:10px;z-index:9999;background:rgba(0,255,100,.15);border:1px solid #0f0;color:#0f0;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
+    #btn-pixels{position:fixed;top:10px;right:100px;z-index:9999;background:rgba(255,140,0,.15);border:1px solid #f80;color:#f80;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
+    #stats-panel{display:none;position:fixed;top:0;right:0;width:320px;height:100%;background:rgba(0,0,0,.96);border-left:1px solid #1a1a1a;z-index:9998;overflow-y:auto;padding:10px;font-size:11px;color:#ccc}
+    #stats-panel.open{display:block}
+    #pixel-panel{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:10000;overflow-y:auto;padding:14px;font-size:11px;color:#ccc}
+    #pixel-panel.open{display:block}
+    .ptitle{color:#0f0;font-size:13px;font-weight:bold;border-bottom:1px solid #1a3a1a;padding-bottom:6px;margin-bottom:8px;letter-spacing:2px}
+    .pxtitle{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1a0a00;padding-bottom:8px;margin-bottom:12px}
+    .pxtitle span:first-child{color:#f80;font-size:14px;font-weight:bold;letter-spacing:2px}
+    .pxclose{cursor:pointer;color:#555;font-size:22px;padding:0 8px}
+    .uptime{color:#4af;font-size:10px;text-align:right;margin-bottom:6px}
+    .sec{margin-bottom:10px}
+    .sec-t{color:#555;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;border-bottom:1px solid #111;padding-bottom:2px}
+    .sr{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #0a0a0a}
+    .sl{color:#555}.sv{color:#fff;font-weight:bold}
+    .green{color:#0f0!important}.yellow{color:#ff0!important}.red{color:#f44!important}.blue{color:#4af!important}.orange{color:#f80!important}
+    #now-playing{background:#001500;border:1px solid #0a3a0a;border-radius:4px;padding:8px;margin-bottom:8px;text-align:center}
+    .nps{color:#0f0;font-size:13px;font-weight:bold}.npd{color:#666;font-size:10px;margin-top:2px}
+    .srow{padding:4px 6px;margin:2px 0;border-radius:3px;border-left:3px solid #222;background:#080808}
+    .srow.active{border-left-color:#0f0;background:#001500}
+    .srow.filled{border-left-color:#4af;background:#001018}
+    .srow.trying{border-left-color:#ff0;background:#111000}
+    .srow.errored{border-left-color:#f44;background:#100000}
+    .sname{color:#ddd;font-size:11px;font-weight:bold}.sstats{color:#555;font-size:9px;margin-top:1px}
+    .badge{display:inline-block;padding:1px 4px;border-radius:2px;font-size:9px;margin-left:4px;font-weight:bold}
+    .b-live{background:#0f0;color:#000}.b-try{background:#ff0;color:#000}.b-fill{background:#4af;color:#000}.b-err{background:#f44;color:#fff}
+    .scrollbox{overflow-y:auto;background:#030303;border:1px solid #111;border-radius:3px;padding:4px}
+    .evrow{padding:2px 3px;margin:1px 0;font-size:10px;border-left:2px solid #222;line-height:1.3}
+    .evrow.imp{border-left-color:#0f0;color:#0b0}.evrow.start{border-left-color:#4af;color:#4af}
+    .evrow.q{border-left-color:#ff0;color:#990}.evrow.done{border-left-color:#f80;color:#f80}
+    .evrow.err{border-left-color:#f44;color:#f44}.evrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
+    .logrow{font-size:10px;padding:1px 2px}
+    .logrow.info{color:#4af}.logrow.ok{color:#0f0}.logrow.warn{color:#ff0}.logrow.err{color:#f44}.logrow.dim{color:#444}
+    .ts{color:#333;margin-right:4px}
+    .tabs{display:flex;margin-bottom:4px}
+    .tab{flex:1;text-align:center;padding:4px;font-size:10px;cursor:pointer;border:1px solid #222;color:#555}
+    .tab.active{border-color:#0f0;color:#0f0;background:#001500}
+    .pp-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+    .pp-card{background:#080808;border:1px solid #1a1a1a;border-radius:4px;padding:8px;text-align:center}
+    .pp-card-t{color:#555;font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+    .pp-card-v{font-size:22px;font-weight:bold;color:#fff}
+    .pp-sec{margin-bottom:14px}
+    .pp-sec-t{color:#f80;font-size:10px;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid #1a0a00;padding-bottom:4px;margin-bottom:8px}
+    .dcard{background:#080808;border:1px solid #1a1a1a;border-radius:4px;padding:10px;margin-bottom:8px;cursor:pointer}
+    .dcard:active{border-color:#f80}
+    .dname{color:#fff;font-weight:bold;font-size:12px}.ddomain{color:#444;font-size:10px;margin-top:2px}
+    .dbadges{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+    .dbadge{padding:3px 8px;border-radius:3px;font-size:10px;font-weight:bold}
+    .db-ok{background:#0f0;color:#000}.db-dead{background:#f44;color:#fff}.db-test{background:#f80;color:#000}.db-prod{background:#4af;color:#000}
+    .ddetail{background:#030303;border-radius:4px;padding:8px;margin-top:8px;font-size:10px;display:none}
+    .ddetail.open{display:block}
+    .dd-sec{color:#f80;font-size:9px;letter-spacing:1px;text-transform:uppercase;margin:8px 0 4px}
+    .ddrow{display:flex;justify-content:space-between;border-bottom:1px solid #0a0a0a;padding:3px 0}
+    .ddk{color:#555;flex-shrink:0;margin-right:8px}.ddv{color:#aaa;word-break:break-all;text-align:right}
+    .dd-url{color:#333;font-size:9px;word-break:break-all;margin-top:6px;padding:4px;background:#000;border-radius:2px}
+    .lf{max-height:280px;overflow-y:auto;background:#030303;border:1px solid #111;border-radius:4px;padding:6px}
+    .lfrow{padding:3px 4px;margin:1px 0;font-size:10px;border-left:3px solid #222;line-height:1.4}
+    .lfrow.imp{border-left-color:#0f0;color:#0b0}.lfrow.start{border-left-color:#4af;color:#4af}
+    .lfrow.q{border-left-color:#ff0;color:#990}.lfrow.done{border-left-color:#f80;color:#f80}
+    .lfrow.err{border-left-color:#f44;color:#f44}.lfrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
+    .lfdest{color:#333;font-size:9px;margin-top:1px;word-break:break-all}
+  </style>
+</head>
+<body>
+<div id="ad-container">
+  <video id="content-video" playsinline muted></video>
+  <div id="ad-display"></div>
+  <div id="touch-blocker" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>
+</div>
+<button id="btn-stats" onclick="toggleStats()">STATS</button>
+<button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
+
+<div id="stats-panel">
+  <div class="ptitle">CURB AD MONITOR</div>
+  <div class="uptime" id="uptime">UP: 00:00:00</div>
+  <div id="now-playing"><div class="nps" id="nps">INITIALIZING...</div><div class="npd" id="npd">Starting up</div></div>
+  <div class="sec"><div class="sec-t">Session Stats</div>
+    <div class="sr"><span class="sl">Total Requests</span><span class="sv" id="s-req">0</span></div>
+    <div class="sr"><span class="sl">Fills</span><span class="sv green" id="s-fills">0</span></div>
+    <div class="sr"><span class="sl">Errors / No Fill</span><span class="sv red" id="s-err">0</span></div>
+    <div class="sr"><span class="sl">Fill Rate</span><span class="sv" id="s-rate">0%</span></div>
+    <div class="sr"><span class="sl">Ads Completed</span><span class="sv blue" id="s-done">0</span></div>
+    <div class="sr"><span class="sl">Impressions Fired</span><span class="sv green" id="s-imp">0</span></div>
+    <div class="sr"><span class="sl">Pixels Dead</span><span class="sv" id="s-dead">0</span></div>
+    <div class="sr"><span class="sl">Last Fill Source</span><span class="sv blue" id="s-src">-</span></div>
+    <div class="sr"><span class="sl">Last Advertiser</span><span class="sv" id="s-adv">-</span></div>
+    <div class="sr"><span class="sl">Floor CPM</span><span class="sv orange" id="s-floor">$3.00</span></div>
+    <div class="sr"><span class="sl">Est. Rev (Session)</span><span class="sv green" id="s-rev">$0.0000</span></div>
+    <div class="sr"><span class="sl">Est. Rev (Today)</span><span class="sv green" id="s-rev-day">$0.00</span></div>
+    <div class="sr"><span class="sl">Heartbeat</span><span class="sv" id="s-hb">-</span></div>
+    <div class="sr"><span class="sl">HB Failures</span><span class="sv" id="s-hb-fail">0</span></div>
+    <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
+  </div>
+  <div class="sec"><div class="sec-t">Waterfall Sources</div><div id="source-list"></div></div>
+  <div class="sec"><div class="sec-t">Events</div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('ev')">EVENTS</div>
+      <div class="tab" onclick="switchTab('lg')">LOG</div>
+    </div>
+    <div id="tab-ev" class="scrollbox" style="max-height:200px"></div>
+    <div id="tab-lg" class="scrollbox" style="max-height:200px;display:none"></div>
+  </div>
+</div>
+
+<div id="pixel-panel">
+  <div class="pxtitle">
+    <span>TRACKING PIXEL MONITOR</span>
+    <span class="pxclose" onclick="togglePixels()">&#10005;</span>
+  </div>
+  <div class="pp-grid">
+    <div class="pp-card"><div class="pp-card-t">Pixels Fired</div><div class="pp-card-v green" id="pp-fired">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Dead Pixels</div><div class="pp-card-v" id="pp-dead">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Destinations</div><div class="pp-card-v orange" id="pp-dests">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Billing</div><div class="pp-card-v" id="pp-billing">?</div></div>
+  </div>
+  <div class="pp-sec">
+    <div class="pp-sec-t">Ad Metadata — from IMA SDK</div>
+    <div id="pp-meta-list"><div style="color:#444;padding:8px">Wait for an ad to start playing</div></div>
+  </div>
+  <div class="pp-sec">
+    <div class="pp-sec-t">Pixel Destinations — tap each to see what data is collected and where it goes</div>
+    <div id="pp-dest-list"><div style="color:#444;padding:12px;text-align:center">No pixel traffic yet — wait for an ad to play</div></div>
+  </div>
+  <div class="pp-sec">
+    <div class="pp-sec-t">Live Pixel Feed</div>
+    <div class="lf" id="pp-lf"><div style="color:#444;padding:8px">Waiting for pixel events...</div></div>
+  </div>
+</div>
+
+<script>
+var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
+var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
+var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
+var INTERVAL=10000;
+var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
+var vid=document.getElementById('content-video');
+var adDiv=document.getElementById('ad-display');
+var playing=false,t0=Date.now(),adT0=null,nextTimer=null,cdown=null;
+var S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};
+var FLOOR_CPM=3.00;
+var srcStats={},pixEv=[],pixDest={},logs=[],vastPixels=[],adMeta=[],adMetaTs='',S_hbOk=0,S_hbFail=0;
+var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
+var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
+
+var oOpen=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(m,url){this._u=url;return oOpen.apply(this,arguments)};
+var oSend=XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.send=function(){
+  if(this._u){var u=this._u,s=this;onReq(u);
+    this.addEventListener('load',function(){onRes(u,s.status)});
+    this.addEventListener('error',function(){onRes(u,0)})}
+  return oSend.apply(this,arguments)};
+var oFetch=window.fetch;
+window.fetch=function(input,opts){
+  var url=typeof input==='string'?input:(input&&input.url?input.url:null);
+  if(url)onReq(url);
+  var p=oFetch.apply(this,arguments);
+  if(url)p.then(function(r){onRes(url,r.status)}).catch(function(){onRes(url,0)});
+  return p};
+
+function skip(u){if(!u||typeof u!=='string')return true;
+  return u.indexOf('trillboards.com/v1')>=0||u.indexOf('imasdk.googleapis')>=0||u.indexOf('localhost')>=0}
+function isPix(u){return u.indexOf('pixel')>=0||u.indexOf('doubleclick')>=0||u.indexOf('vidverto')>=0||u.indexOf('adipolo')>=0||u.indexOf('aioo')>=0||u.indexOf('voisetech')>=0||u.indexOf('googleads')>=0}
+function dom(u){try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return u.substring(0,40)}}
+function ptype(u){
+  if(u.indexOf('vidverto')>=0)return'Vidverto SSP';
+  if(u.indexOf('xbbe')>=0)return'Google DV360 Impression';
+  if(u.indexOf('doubleclick')>=0&&u.indexOf('vast')>=0)return'Google GAM VAST';
+  if(u.indexOf('doubleclick')>=0)return'Google DoubleClick';
+  if(u.indexOf('adipolo')>=0)return'Adipolo SSP';
+  if(u.indexOf('aioo')>=0)return'AIOO';
+  if(u.indexOf('voisetech')>=0)return'Voisetech';
+  return dom(u)}
+function pparams(u){try{var o=new URL(u),p={};o.searchParams.forEach(function(v,k){p[k]=v});return{d:o.hostname,path:o.pathname,p:p}}catch(e){return{d:'',path:'',p:{}}}}
+
+function onReq(u){if(skip(u)||!isPix(u))return;
+  var d=dom(u);
+  if(!pixDest[d])pixDest[d]={type:ptype(u),count:0,ok:0,dead:0,last:'',urls:[],test:u.indexOf('/test/')>=0};
+  var dest=pixDest[d];dest.count++;dest.last=new Date().toTimeString().substring(0,8);
+  if(dest.urls.length<2&&!dest.urls.some(function(x){return x===u}))dest.urls.push(u)}
+
+function onRes(u,status){if(skip(u)||!isPix(u))return;
+  var d=dom(u),ok=status>=200&&status<400;
+  if(pixDest[d]){if(ok)pixDest[d].ok++;else pixDest[d].dead++}
+  if(!ok){S.dead++;addEv('dead','PIXEL DEAD: '+d+' ['+status+']',u);updStats()}}
+
+function addEv(type,msg,url){
+  var ts=new Date().toTimeString().substring(0,8);
+  pixEv.unshift({type:type,msg:msg,url:url,ts:ts});
+  if(pixEv.length>80)pixEv.pop();
+  rendEv();rendLF()}
+
+function log(msg,type){type=type||'dim';
+  var ts=new Date().toTimeString().substring(0,8);
+  logs.unshift({msg:msg,type:type,ts:ts});if(logs.length>100)logs.pop();
+  rendLog();console.log('[Curb] '+msg)}
+
+function st(id,v){var e=document.getElementById(id);if(e)e.textContent=v}
+function setNP(s,d){st('nps',s);st('npd',d)}
+
+function updStats(){
+  var r=S.req>0?Math.round((S.fills/S.req)*100):0;
+  st('s-req',S.req);st('s-fills',S.fills);st('s-err',S.err);st('s-done',S.done);
+  st('s-imp',S.imp);st('s-dead',S.dead);st('s-src',S.src);st('s-adv',S.adv);
+  var rev=(S.imp||0)*(FLOOR_CPM/1000);
+  st('s-rev','$'+rev.toFixed(4));
+  var hrs=(Date.now()-t0)/3600000;
+  var dayEst=hrs>0?(rev/hrs)*24:0;
+  st('s-rev-day','$'+dayEst.toFixed(2));
+  var re=document.getElementById('s-rate');
+  if(re){re.textContent=r+'%';re.className='sv '+(r>60?'green':r>30?'yellow':'red')}
+  var de=document.getElementById('s-dead');
+  if(de)de.className='sv '+(S.dead>0?'red':'green');
+  rendSrc()}
+
+function rendSrc(){var e=document.getElementById('source-list');if(!e||!sources.length)return;
+  e.innerHTML=sources.map(function(s,i){
+    var ss=srcStats[s.name]||{req:0,fills:0,err:0};
+    var rate=ss.req>0?Math.round((ss.fills/ss.req)*100):0;
+    var cls='srow',badge='';
+    if(i===idx&&playing){cls+=' active';badge='<span class="badge b-live">LIVE</span>'}
+    else if(i===idx&&!playing){cls+=' trying';badge='<span class="badge b-try">TRY</span>'}
+    else if(ss.fills>0){cls+=' filled';badge='<span class="badge b-fill">FILL</span>'}
+    else if(ss.err>0&&ss.fills===0){cls+=' errored';badge='<span class="badge b-err">ERR</span>'}
+    return'<div class="'+cls+'"><div class="sname">'+(i+1)+'. '+s.name.toUpperCase()+badge+'</div>'+
+      '<div class="sstats">Req:'+ss.req+' Fill:'+ss.fills+' Err:'+ss.err+
+      ' Rate:<span class="'+(rate>60?'green':rate>30?'yellow':rate>0?'red':'')+'">'+ rate+'%</span></div></div>'
+  }).join('')}
+
+function rendEv(){var e=document.getElementById('tab-ev');if(!e)return;
+  e.innerHTML=pixEv.slice(0,40).map(function(e){
+    return'<div class="evrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
+
+function rendLog(){var e=document.getElementById('tab-lg');if(!e)return;
+  e.innerHTML=logs.slice(0,40).map(function(e){
+    return'<div class="logrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
+
+function rendLF(){var e=document.getElementById('pp-lf');if(!e)return;
+  e.innerHTML=pixEv.slice(0,50).map(function(e){
+    var d=e.url?'<div class="lfdest">to: '+dom(e.url)+'</div>':'';
+    return'<div class="lfrow '+e.type+'"><span style="color:#333">'+e.ts+'</span> '+e.msg+d+'</div>'
+  }).join('')||'<div style="color:#444;padding:8px">Waiting...</div>'}
+
+function refreshPP(){
+  var testC=Object.keys(pixDest).filter(function(d){return pixDest[d].test}).length;
+  var total=Object.keys(pixDest).length;
+  st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',total);
+  var be=document.getElementById('pp-billing');
+  if(be){if(testC>0){be.textContent='TEST';be.className='pp-card-v red'}
+    else if(total>0){be.textContent='PROD';be.className='pp-card-v green'}
+    else{be.textContent='?';be.className='pp-card-v'}}
+  var ml=document.getElementById('pp-meta-list');
+  if(ml){
+    if(!adMeta.length){ml.innerHTML='<div style="color:#444;padding:8px">Wait for an ad to start playing</div>';}
+    else{
+      var metaHtml='<div style="color:#333;font-size:9px;margin-bottom:4px">'+adMetaTs+'</div>'+
+        adMeta.map(function(m){
+          return'<div style="display:flex;justify-content:space-between;border-bottom:1px solid #0a0a0a;padding:3px 0">'+
+            '<span style="color:#f80;font-size:10px;flex-shrink:0;margin-right:6px">'+m.k+'</span>'+
+            '<span style="color:#fff;font-size:10px;word-break:break-all;max-width:65%;text-align:right">'+m.v+'</span></div>';
+        }).join('');
+      if(vastPixels.length){
+        metaHtml+='<div style="color:#4af;font-size:9px;margin:8px 0 4px;letter-spacing:1px">VAST TRACKING URLS ('+vastPixels.length+')</div>'+
+          vastPixels.slice(0,20).map(function(p){
+            return'<div style="border-bottom:1px solid #0a0a0a;padding:2px 0">'+
+              '<span style="color:#555;font-size:9px">'+p.tag+': </span>'+
+              '<span style="color:#aaa;font-size:9px;word-break:break-all">'+p.url+'</span></div>';
+          }).join('');
+      }
+      ml.innerHTML=metaHtml;
+    }
+  }
+  var dl=document.getElementById('pp-dest-list');if(!dl)return;
+  var doms=Object.keys(pixDest);
+  if(!doms.length){dl.innerHTML='<div style="color:#444;padding:12px;text-align:center">No pixel traffic yet</div>';rendLF();return}
+  dl.innerHTML=doms.map(function(domain){
+    var d=pixDest[domain];
+    var pp=pparams(d.urls[0]||'');
+    var collected=[];
+    var su=d.urls[0]||'';
+    if(su.indexOf('ppid=')>=0||su.indexOf('screen_id=')>=0)collected.push({k:'Screen ID',v:'Identifies your screen to the advertiser'});
+    if(su.indexOf('ifa=')>=0)collected.push({k:'Device ID (ifa)',v:'Hardware ID for frequency capping'});
+    if(su.indexOf('city=')>=0)collected.push({k:'City / State',v:'Location — New York NY'});
+    if(su.indexOf('daypart=')>=0)collected.push({k:'Daypart',v:'Time of day for targeting'});
+    if(su.indexOf('ua=')>=0)collected.push({k:'User Agent',v:'Browser/device info'});
+    if(su.indexOf('uip=')>=0)collected.push({k:'IP Address',v:'Geo-targeting and fraud detection'});
+    if(su.indexOf('venuetype=')>=0)collected.push({k:'Venue Type',v:'Transit/taxi contextual targeting'});
+    if(su.indexOf('schain=')>=0)collected.push({k:'Supply Chain',v:'trillboards.com verified schain'});
+    if(su.indexOf('cust_params=')>=0)collected.push({k:'Custom Params',v:'dow, dooh, daypart, venue_parent'});
+    if(su.indexOf('correlator=')>=0)collected.push({k:'Correlator',v:'Session ID — prevents duplicate impressions'});
+    if(pp.p['pzoneid'])collected.push({k:'Zone ID',v:'Vidverto zone: '+pp.p['pzoneid']});
+    if(pp.p['iu'])collected.push({k:'Ad Unit',v:decodeURIComponent(pp.p['iu'])});
+    var chHtml=collected.map(function(c){return'<div class="ddrow"><span class="ddk">'+c.k+'</span><span class="ddv">'+c.v+'</span></div>'}).join('');
+    return'<div class="dcard" onclick="togDest(this)">'+
+      '<div style="display:flex;justify-content:space-between">'+
+        '<div><div class="dname">'+d.type+'</div><div class="ddomain">'+domain+'</div></div>'+
+        '<div style="text-align:right;font-size:10px">'+
+          '<div class="'+(d.dead>0?'red':'green')+'">'+d.ok+' ok / '+d.dead+' dead</div>'+
+          '<div style="color:#444">'+d.count+' hits - '+d.last+'</div></div></div>'+
+      '<div class="dbadges">'+
+        (d.test?'<span class="dbadge db-test">TEST - NOT BILLING</span>':'<span class="dbadge db-prod">PRODUCTION - BILLING</span>')+
+        (d.dead>0?'<span class="dbadge db-dead">'+d.dead+' DEAD</span>':'<span class="dbadge db-ok">HEALTHY</span>')+
+      '</div>'+
+      '<div class="ddetail">'+
+        (collected.length?'<div class="dd-sec">Data Collected and Sent to This Destination</div>'+chHtml:'<div style="color:#444">No params found</div>')+
+        (d.urls[0]?'<div class="dd-sec">Sample Pixel URL</div><div class="dd-url">'+d.urls[0].substring(0,250)+'</div>':'')+
+      '</div></div>'
+  }).join('');
+  rendLF()}
+
+function togDest(card){var d=card.querySelector('.ddetail');if(d)d.classList.toggle('open')}
+function switchTab(t){
+  document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';
+  document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
+  document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
+var IMP_URL='https://api.trillboards.com/v1/partner/impression';
+var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
+
+function generateId(){
+  return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);
+}
+
+function sendImpression(adid,aid,duration,completed){
+  var impid=generateId();
+  var params=new URLSearchParams({
+    adid: adid||'unknown',
+    impid: impid,
+    did: DEVICE_ID,
+    sid: SCREEN_ID,
+    aid: aid||'',
+    duration: duration||0,
+    completed: completed?'true':'false',
+    display_mode: 'fullscreen',
+    display_area_ratio: '1.0'
+  });
+  fetch(IMP_URL+'?'+params.toString(),{
+    method:'POST',
+    headers:{
+      'Authorization':'Bearer '+HB_KEY,
+      'Content-Type':'application/json'
+    }
+  }).then(function(r){
+    log('Impression POST OK ('+r.status+') adid:'+adid,'ok');
+    addEv('imp','IMP SENT TO TRILLBOARDS: '+(adid||'unknown'),'');
+  }).catch(function(e){
+    log('Impression POST FAIL: '+e.message,'err');
+  });
+}
+
+function sendHeartbeat(){
+  fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({device_id:'P_691cbdd4b3117cb1b692f4ae',timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
+  }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}log('HB OK ('+r.status+')','ok');
+  }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});
+}
+
+function dumpAdMeta(ad){
+  var ts=new Date().toTimeString().substring(0,8);
+  var info=[];
+  try{if(ad.getAdId&&ad.getAdId())info.push({k:'Ad ID',v:ad.getAdId()});}catch(e){}
+  try{if(ad.getCreativeId&&ad.getCreativeId())info.push({k:'Creative ID',v:ad.getCreativeId()});}catch(e){}
+  try{if(ad.getAdvertiserName&&ad.getAdvertiserName())info.push({k:'Advertiser',v:ad.getAdvertiserName()});}catch(e){}
+  try{if(ad.getTitle&&ad.getTitle())info.push({k:'Title',v:ad.getTitle()});}catch(e){}
+  try{if(ad.getAdSystem&&ad.getAdSystem())info.push({k:'Ad System',v:ad.getAdSystem()});}catch(e){}
+  try{if(ad.getMediaUrl&&ad.getMediaUrl())info.push({k:'Media URL',v:ad.getMediaUrl()});}catch(e){}
+  try{if(ad.getDuration)info.push({k:'Duration',v:Math.round(ad.getDuration())+'s'});}catch(e){}
+  try{if(ad.getContentType&&ad.getContentType())info.push({k:'Content Type',v:ad.getContentType()});}catch(e){}
+  try{if(ad.getWidth)info.push({k:'Size',v:ad.getWidth()+'x'+ad.getHeight()});}catch(e){}
+  adMeta=info;adMetaTs=ts;
+  log('Ad meta: '+info.length+' fields','ok');
+  var src=sources[idx]||sources[0];
+  if(src&&src.vast_url) fetchVastPixels(src.vast_url);
+}
+
+function fetchVastPixels(vastUrl){
+  log('Fetching VAST XML...','info');
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET',vastUrl,true);
+  xhr.onload=function(){ if(xhr.status>=200&&xhr.status<400){ parseVastPixels(xhr.responseText); } else { log('VAST fetch failed: '+xhr.status,'warn'); } };
+  xhr.onerror=function(){ log('VAST fetch error','warn'); };
+  xhr.send();
+}
+
+function parseVastPixels(xml){
+  var urls=[];
+  var tags=['Impression','Tracking','ClickTracking','ErrorUri','ViewableImpression','NotViewableImpression'];
+  tags.forEach(function(tag){
+    var re=new RegExp('<'+tag+'[^>]*>\s*<!\[CDATA\[([^\]]+)\]\]>\s*</'+tag+'>','gi');
+    var m;
+    while((m=re.exec(xml))!==null){ var u=m[1].trim(); if(u) urls.push({tag:tag,url:u}); }
+    var re2=new RegExp('<'+tag+'[^>]*>([^<]+)</'+tag+'>','gi');
+    while((m=re2.exec(xml))!==null){ var u=m[1].trim(); if(u&&u.indexOf('http')===0) urls.push({tag:tag,url:u}); }
+  });
+  log('VAST parsed: '+urls.length+' tracking URLs','ok');
+  vastPixels=urls;
+  urls.forEach(function(item){
+    var u=item.url,d=dom(u);
+    if(!pixDest[d])pixDest[d]={type:ptype(u),count:0,ok:0,dead:0,last:'VAST',urls:[],test:u.indexOf('/test/')>=0&&u.indexOf('pixel.gif')<0};
+    if(!pixDest[d].urls.some(function(x){return x===u;}))pixDest[d].urls.push(u);
+    pixDest[d].count++;
+  });
+  addEv('imp','VAST: '+urls.length+' tracking URLs parsed','');
+}
+
+// Block touch/click on ad to prevent pause
+document.addEventListener('DOMContentLoaded',function(){
+  var blocker=document.getElementById('touch-blocker');
+  if(blocker){
+    blocker.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();},true);
+    blocker.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();},true);
+    blocker.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();},true);
+  }
+  var ad=document.getElementById('ad-container');
+  if(ad){
+    ad.addEventListener('touchstart',function(e){
+      // only block if not hitting our buttons
+      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'){
+        e.preventDefault();
+      }
+    },{passive:false});
+  }
+});
+function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
+function togglePixels(){var p=document.getElementById('pixel-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshPP()}
+
+setInterval(function(){
+  var e=Math.floor((Date.now()-t0)/1000),h=Math.floor(e/3600),m=Math.floor((e%3600)/60),s=e%60;
+  st('uptime','UP: '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));
+  if(cdown){var left=Math.max(0,Math.ceil((cdown-Date.now())/1000));st('s-next',left>0?left+'s':'now')}
+  if(document.getElementById('pixel-panel').classList.contains('open')){
+    st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',Object.keys(pixDest).length)}
+},1000);
+
+function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
+
+function fetchSources(){
+  log('Fetching waterfall sources...','info');setNP('FETCHING...','Calling API');
+  fetch(API_URL,{headers:{'Authorization':'Bearer '+API_KEY}})
+  .then(function(r){return r.json()})
+  .then(function(data){
+    if(data.success&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
+      sources=data.data.header_bidding_settings.vast_waterfall.sources;
+      sources.sort(function(a,b){return a.priority-b.priority});
+      sources.forEach(function(s){srcStats[s.name]={req:0,fills:0,err:0}});
+      log('Got '+sources.length+' sources','ok');rendSrc();initIMA()
+    }else{log('No sources — retry 30s','warn');setNP('NO SOURCES','Retrying 30s');sched(30000)}
+  }).catch(function(e){log('API error: '+e.message,'err');setNP('API ERROR',e.message);sched(30000)})}
+
+function initIMA(){
+  log('IMA ready','ok');
+  adDisplayContainer=new google.ima.AdDisplayContainer(adDiv,vid);
+  adDisplayContainer.initialize();
+  adsLoader=new google.ima.AdsLoader(adDisplayContainer);
+  adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
+  adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
+  idx=0;reqNext()}
+
+function reqNext(){
+  clearTimeout(nextTimer);cdown=null;st('s-next','-');
+  if(idx>=sources.length){
+    log('All exhausted - '+INTERVAL/1000+'s wait','warn');
+    setNP('NO FILL','All '+sources.length+' sources failed');
+    idx=0;updStats();sched(INTERVAL);return}
+  var s=sources[idx];
+  log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
+  srcStats[s.name].req++;S.req++;updStats();
+  var req=new google.ima.AdsRequest();
+  req.adTagUrl=s.vast_url;
+  req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
+  req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
+  try{adsLoader.requestAds(req)}catch(e){
+    log('Threw: '+s.name+' '+e.message,'err');
+    srcStats[s.name].err++;S.err++;idx++;reqNext()}}
+
+function onLoaded(event){
+  var s=sources[idx];
+  log('Manager loaded: '+s.name,'ok');
+  if(adsManager){try{adsManager.destroy()}catch(e){}}
+  adsManager=event.getAdsManager(vid);
+  adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED,onDone,false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
+    if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';
+      setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
+    var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';
+    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration())+'s':'?s';
+    log('STARTED - '+s.name+' - '+adv,'ok');
+    addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
+    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;
+    playing=true;adT0=Date.now();setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);updStats();
+    if(ad)dumpAdMeta(ad);
+  },false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
+    S.imp++;S.rev+=FLOOR_CPM/1000;addEv('imp','IMPRESSION FIRED - '+s.name,'');updStats();
+    var adid=ad?ad.getAdId():'unknown';var aid=ad?ad.getDealId():'';var dur=ad?Math.round(ad.getDuration()):0;
+    sendImpression(adid,aid,dur,false);},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){addEv('q','75% - '+s.name,'')},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
+    var adid=ad?ad.getAdId():'unknown';var aid=ad?ad.getDealId():'';var dur=ad?Math.round(ad.getDuration()):0;
+    sendImpression(adid,aid,dur,true);
+    var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
+    log('COMPLETE - '+s.name+' - '+p,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
+    S.done++;updStats()},false);
+  try{
+    var rs=new google.ima.AdsRenderingSettings();
+    rs.uiElements=[];
+    rs.skipDelay=-1;
+    rs.disableUi=true;
+    adsManager.updateAdsRenderingSettings(rs);
+    adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
+    adsManager.start();
+    // Force hide skip and pause via CSS
+    setTimeout(function(){
+      var style=document.createElement('style');
+      style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}'+
+        '.ima-controls-div{display:none!important;}'+
+        '.ima-mute-button{display:none!important;}'+
+        '.ima-pause-button{display:none!important;}'+
+        '[class*="skip"]{display:none!important;}'+
+        '[class*="pause"]{display:none!important;}'+
+        '[id*="skip"]{display:none!important;}';
+      document.head.appendChild(style);
+    },500);
+    idx=0
+  }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
+
+function onErr(event){
+  var s=sources[idx];
+  var er=event.getError?event.getError().toString():'unknown';
+  log('ERROR - '+(s?s.name:'?')+' - '+er.substring(0,60),'err');
+  addEv('err','ERROR - '+(s?s.name:'?'),'');
+  if(s){srcStats[s.name].err++;S.err++}
+  playing=false;
+  if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
+  idx++;updStats();setTimeout(reqNext,500)}
+
+function onDone(){
+  log('Cycle done - next in '+INTERVAL/1000+'s','info');
+  playing=false;idx=0;setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
+
+document.addEventListener('click',function(e){
+  if(e.target.id==='btn-stats'||e.target.id==='btn-pixels')return;
+  if(document.getElementById('pixel-panel').classList.contains('open'))return;
+  if(!playing&&adsManager)adsManager.start()});
+
+window.addEventListener('load',function(){log('IMA: '+typeof google,'ok');fetchSources();sendHeartbeat();setInterval(sendHeartbeat,60000);});
+</script>
+</body>
+</html>
