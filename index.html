@@ -12,7 +12,19 @@
     #content-video{position:absolute;top:0;left:0;width:100%;height:100%}
     #ad-display{position:absolute;top:0;left:0;width:100%;height:100%}
     #btn-stats{position:fixed;top:10px;right:10px;z-index:9999;background:rgba(0,255,100,.15);border:1px solid #0f0;color:#0f0;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
-    #btn-pixels{position:fixed;top:10px;right:100px;z-index:9999;background:rgba(255,140,0,.15);border:1px solid #f80;color:#f80;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
+    #btn-pixels{position:fixed;top:46px;right:10px;z-index:9999;background:rgba(255,140,0,.15);border:1px solid #f80;color:#f80;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
+    #btn-set{position:fixed;top:82px;right:10px;z-index:9999;background:rgba(100,100,255,.15);border:1px solid #88f;color:#88f;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
+    #btn-data{position:fixed;top:118px;right:10px;z-index:9999;background:rgba(0,255,200,.1);border:1px solid #0fc;color:#0fc;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
+    #set-panel{display:none;position:fixed;top:0;right:0;width:320px;height:100%;background:rgba(0,0,0,.96);border-left:1px solid #1a1a1a;z-index:9997;overflow-y:auto;padding:10px;font-size:11px;color:#ccc}
+    #set-panel.open{display:block}
+    #data-panel{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:10000;overflow-y:auto;padding:14px;font-size:11px;color:#ccc}
+    #data-panel.open{display:block}
+    .ph-row{padding:4px 6px;margin:2px 0;border-radius:3px;border-left:3px solid #333;background:#050505;cursor:pointer;font-size:10px}
+    .ph-row.ok{border-left-color:#0f0}.ph-row.fail{border-left-color:#f44}.ph-row.retry{border-left-color:#ff0}.ph-row.queued{border-left-color:#f80}
+    .ph-detail{display:none;margin-top:6px;padding:4px;background:#000;border-radius:2px;word-break:break-all;color:#555;font-size:9px}
+    .ph-detail.open{display:block}
+    .hr-bar{display:inline-block;background:#0f0;vertical-align:bottom;width:18px;margin:0 1px}
+    .oq-badge{display:none;position:fixed;top:120px;right:60px;z-index:10000;background:#f80;color:#000;font-size:9px;font-weight:bold;padding:2px 6px;border-radius:8px}
     #stats-panel{display:none;position:fixed;top:0;right:0;width:320px;height:100%;background:rgba(0,0,0,.96);border-left:1px solid #1a1a1a;z-index:9998;overflow-y:auto;padding:10px;font-size:11px;color:#ccc}
     #stats-panel.open{display:block}
     #pixel-panel{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:10000;overflow-y:auto;padding:14px;font-size:11px;color:#ccc}
@@ -82,6 +94,61 @@
 </div>
 <button id="btn-stats" onclick="toggleStats()">STATS</button>
 <button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
+<button id="btn-set" onclick="toggleSet()">SET</button>
+<button id="btn-data" onclick="toggleData()">DATA</button>
+<div class="oq-badge" id="oq-badge">0 QUEUED</div>
+
+<!-- Settings panel -->
+<div id="set-panel">
+  <div class="ptitle">SETTINGS</div>
+  <div class="sec"><div class="sec-t">Pacing</div>
+    <div class="sr"><span class="sl">Min gap (min)</span>
+      <input type="number" id="cfg-gap" value="2" min="1" max="10" style="width:50px;background:#111;color:#fff;border:1px solid #333;padding:2px 4px;font-family:monospace;font-size:11px" onchange="applySettings()">
+    </div>
+    <div class="sr"><span class="sl">Current gap</span><span class="sv" id="cfg-gap-cur">2 min</span></div>
+  </div>
+  <div class="sec"><div class="sec-t">Impression endpoint</div>
+    <div style="word-break:break-all;color:#444;font-size:9px;padding:4px 0" id="cfg-imp-url"></div>
+  </div>
+  <div class="sec"><div class="sec-t">Device</div>
+    <div class="sr"><span class="sl">Device ID</span><span class="sv blue" id="cfg-did" style="font-size:9px;word-break:break-all"></span></div>
+    <div class="sr"><span class="sl">Screen ID</span><span class="sv blue" id="cfg-sid" style="font-size:9px;word-break:break-all"></span></div>
+  </div>
+  <div class="sec"><div class="sec-t">GPS</div>
+    <div class="sr"><span class="sl">Status</span><span class="sv" id="cfg-gps">-</span></div>
+    <div class="sr"><span class="sl">Coordinates</span><span class="sv" id="cfg-coords">-</span></div>
+  </div>
+  <div class="sec"><div class="sec-t">Connectivity</div>
+    <div class="sr"><span class="sl">Network</span><span class="sv" id="cfg-net">-</span></div>
+    <div class="sr"><span class="sl">Queued impressions</span><span class="sv orange" id="cfg-queue">0</span></div>
+    <button onclick="flushQueue()" style="margin-top:6px;width:100%;background:#111;color:#f80;border:1px solid #333;padding:4px;font-family:monospace;font-size:10px;cursor:pointer">FLUSH QUEUE NOW</button>
+  </div>
+  <div class="sec"><div class="sec-t">Waterfall</div>
+    <div class="sr"><span class="sl">Sources loaded</span><span class="sv" id="cfg-src-count">-</span></div>
+    <div class="sr"><span class="sl">Empty streak</span><span class="sv red" id="cfg-streak">0</span></div>
+    <div class="sr"><span class="sl">Correlator</span><span class="sv" id="cfg-corr" style="font-size:9px"></span></div>
+  </div>
+</div>
+
+<!-- Data panel -->
+<div id="data-panel">
+  <div class="pxtitle">
+    <span>DATA &amp; POST HISTORY</span>
+    <span class="pxclose" onclick="toggleData()">&#10005;</span>
+  </div>
+  <div class="pp-grid">
+    <div class="pp-card"><div class="pp-card-t">Posts sent</div><div class="pp-card-v green" id="dp-sent">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Posts failed</div><div class="pp-card-v" id="dp-fail">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Retries</div><div class="pp-card-v orange" id="dp-retry">0</div></div>
+    <div class="pp-card"><div class="pp-card-t">Queued</div><div class="pp-card-v orange" id="dp-queue">0</div></div>
+  </div>
+  <div class="pp-sec"><div class="pp-sec-t">Fill rate by hour</div>
+    <div id="hr-chart" style="padding:8px 0;min-height:60px"></div>
+  </div>
+  <div class="pp-sec"><div class="pp-sec-t">POST history (last 20)</div>
+    <div id="post-history" style="max-height:300px;overflow-y:auto"></div>
+  </div>
+</div>
 
 <div id="stats-panel">
   <div class="ptitle">CURB AD MONITOR</div>
@@ -149,7 +216,7 @@ var INTERVAL=10000;
 var correlator=Date.now();
 var emptyStreak=0;
 var lastImpTime=0;
-var MIN_GAP_MS=4*60*1000;
+var MIN_GAP_MS=2*60*1000;
 var gpsLat=0,gpsLng=0,gpsAge=0;
 var GPS_MAX_AGE_MS=5*60*1000;
 var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
@@ -161,6 +228,13 @@ var FLOOR_CPM=3.00;
 var srcStats={},pixEv=[],pixDest={},logs=[],vastPixels=[],adMeta=[],adMetaTs='',S_hbOk=0,S_hbFail=0;
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
+var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
+var postHistory=[],offlineQueue=[],isOnline=navigator.onLine;
+var dpSent=0,dpFail=0,dpRetry=0;
+var hourFills={};
+window.addEventListener('online',function(){isOnline=true;log('Network: online','ok');updNetStatus();flushQueue();});
+window.addEventListener('offline',function(){isOnline=false;log('Network: offline','warn');updNetStatus();});
+function updNetStatus(){var e=document.getElementById('cfg-net');if(e){e.textContent=isOnline?'ONLINE':'OFFLINE';e.style.color=isOnline?'#0f0':'#f44';}}
 
 var oOpen=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,url){this._u=url;return oOpen.apply(this,arguments)};
@@ -333,38 +407,121 @@ function switchTab(t){
   document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';
   document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
   document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
-var IMP_URL='https://api.trillboards.com/v1/partner/impression';
 var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
 
-function generateId(){
-  return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);
+function generateId(){return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);}
+
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function updQueueBadge(){
+  var b=document.getElementById('oq-badge');
+  var q=document.getElementById('cfg-queue');
+  var d=document.getElementById('dp-queue');
+  if(b){b.style.display=offlineQueue.length>0?'inline-block':'none';b.textContent=offlineQueue.length+' QUEUED';}
+  if(q)q.textContent=offlineQueue.length;
+  if(d)d.textContent=offlineQueue.length;
+}
+
+function flushQueue(){
+  if(!isOnline||!offlineQueue.length)return;
+  log('Flushing '+offlineQueue.length+' queued impressions','warn');
+  var items=offlineQueue.slice();
+  offlineQueue=[];updQueueBadge();
+  items.forEach(function(item){sendImpressionWithRetry(item.adid,item.durationSec,item.completed,0,true);});
+}
+
+function addPostHistory(entry){
+  postHistory.unshift(entry);
+  if(postHistory.length>20)postHistory.pop();
+  var s=entry.status;
+  if(s>=200&&s<300)dpSent++;
+  else if(s==='fail')dpFail++;
+  if(entry.attempt>0)dpRetry++;
+  var ds=document.getElementById('dp-sent');if(ds)ds.textContent=dpSent;
+  var df=document.getElementById('dp-fail');if(df)df.textContent=dpFail;
+  var dr=document.getElementById('dp-retry');if(dr)dr.textContent=dpRetry;
+  rendPostHistory();
+}
+
+function rendPostHistory(){
+  var e=document.getElementById('post-history');if(!e)return;
+  if(!postHistory.length){e.innerHTML='<div style="color:#444;padding:4px">No POSTs yet</div>';return;}
+  e.innerHTML=postHistory.map(function(p){
+    var s=p.status;
+    var cls='ph-row '+(s==='queued'?'queued':s==='fail'||s>=400?'fail':p.attempt>0?'retry':'ok');
+    var sc=s==='queued'?'#f80':(s>=200&&s<300?'#0f0':'#f44');
+    var sl=s==='queued'?'QUEUED':s==='fail'?'FAIL':'HTTP '+s;
+    return'<div class="'+cls+'" onclick="this.querySelector('.ph-detail').classList.toggle('open')">'+
+      '<span style="color:#444">'+String(p.ts).substring(11,19)+'</span> '+
+      '<span style="color:'+sc+'">'+sl+'</span>'+
+      (p.attempt>0?'<span style="color:#ff0"> [retry '+p.attempt+']</span>':'')+' '+
+      '<span style="color:#888">'+(p.completed?'COMPLETE':'START')+'</span> '+
+      '<span style="color:#555">'+String(p.adid).substring(0,16)+'</span>'+
+      '<div class="ph-detail"><div style="color:#f80;margin-bottom:2px">BODY</div>'+
+      '<div style="color:#555">'+escHtml(p.body||'')+'</div>'+
+      (p.resp?'<div style="color:#f80;margin:4px 0 2px">RESPONSE</div><div style="color:#0f0">'+escHtml(p.resp.substring(0,300))+'</div>':'')+
+      '</div></div>';
+  }).join('');
+}
+
+function trackHourFill(){
+  var h=new Date().getHours();
+  hourFills[h]=(hourFills[h]||0)+1;
+  rendHourChart();
+}
+
+function rendHourChart(){
+  var e=document.getElementById('hr-chart');if(!e)return;
+  var max=Math.max(1,Math.max.apply(null,Object.values(hourFills)));
+  var html='';
+  for(var h=0;h<24;h++){
+    var v=hourFills[h]||0;
+    var pct=Math.round((v/max)*48);
+    html+='<span title="'+h+':00 - '+v+' fills"><span class="hr-bar" style="height:'+Math.max(2,pct)+'px"></span>'+
+      '<span style="display:block;font-size:8px;color:#444;text-align:center">'+h+'</span></span>';
+  }
+  e.innerHTML='<div style="display:flex;align-items:flex-end;gap:0">'+html+'</div>';
+}
+
+function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
+  if(!isOnline){
+    offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:new Date().toISOString(),retries:attempt});
+    updQueueBadge();
+    log('Offline — queued: '+adid+' (queue: '+offlineQueue.length+')','warn');
+    addPostHistory({adid:adid,completed:completed,status:'queued',attempt:attempt,ts:new Date().toISOString(),body:'',resp:''});
+    return;
+  }
+  var body=JSON.stringify({impressions:[{screen_id:SCREEN_ID,device_id:DEVICE_ID,ad_id:adid||'unknown',timestamp:new Date().toISOString(),duration_ms:(durationSec||0)*1000,completed:!!completed}]});
+  var ts=new Date().toISOString();
+  fetch(BATCH_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},body:body})
+  .then(function(r){
+    var status=r.status;
+    return r.text().then(function(txt){
+      var ok=status>=200&&status<300;
+      log((ok?'Batch POST OK':'Batch POST ERR')+' ('+status+')'+(attempt>0?' [retry '+attempt+']':'')+' adid:'+adid,ok?'ok':'err');
+      if(txt&&txt.length>0)log('RESP: '+txt.substring(0,200),'ok');
+      addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
+      if(!ok&&attempt<3){
+        var delay=[2000,4000,8000][attempt]||8000;
+        setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);
+      }
+    });
+  }).catch(function(e){
+    log('Batch POST FAIL (attempt '+attempt+'): '+e.message,'err');
+    addPostHistory({adid:adid,completed:completed,status:'fail',attempt:attempt,ts:ts,body:body,resp:e.message});
+    if(attempt<3){
+      var delay=[2000,4000,8000][attempt]||8000;
+      setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);
+    } else {
+      offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:ts,retries:attempt});
+      updQueueBadge();
+    }
+  });
 }
 
 function sendImpression(adid,aid,duration,completed){
-  var impid=generateId();
-  var params=new URLSearchParams({
-    adid: adid||'unknown',
-    impid: impid,
-    did: DEVICE_ID,
-    sid: SCREEN_ID,
-    aid: aid||'',
-    duration: duration||0,
-    completed: completed?'true':'false',
-    display_mode: 'fullscreen',
-    display_area_ratio: '1.0'
-  });
-  fetch(IMP_URL+'?'+params.toString(),{
-    method:'POST',
-    headers:{
-      'Authorization':'Bearer '+HB_KEY,
-      'Content-Type':'application/json'
-    }
-  }).then(function(r){
-    log('Impression POST OK ('+r.status+') adid:'+adid,'ok');
-    addEv('imp','IMP SENT TO TRILLBOARDS: '+(adid||'unknown'),'');
-  }).catch(function(e){
-    log('Impression POST FAIL: '+e.message,'err');
-  });
+  sendImpressionWithRetry(adid,duration,completed,0,false);
+  if(completed)trackHourFill();
 }
 
 function updateGpsStatus(s,c){var e=document.getElementById('s-gps');if(e){e.textContent=s;e.style.color=c||'#fff';}}
@@ -465,7 +622,7 @@ document.addEventListener('DOMContentLoaded',function(){
   if(ad){
     ad.addEventListener('touchstart',function(e){
       // only block if not hitting our buttons
-      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'){
+      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'&&e.target.id!=='btn-set'&&e.target.id!=='btn-data'){
         e.preventDefault();
       }
     },{passive:false});
@@ -473,6 +630,25 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
 function togglePixels(){var p=document.getElementById('pixel-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshPP()}
+function toggleSet(){var p=document.getElementById('set-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshSet()}
+function toggleData(){var p=document.getElementById('data-panel');p.classList.toggle('open');if(p.classList.contains('open')){rendPostHistory();rendHourChart();}}
+function refreshSet(){
+  var g=document.getElementById('cfg-gap');if(g)g.value=Math.round(MIN_GAP_MS/60000);
+  var gc=document.getElementById('cfg-gap-cur');if(gc)gc.textContent=Math.round(MIN_GAP_MS/60000)+' min';
+  var iu=document.getElementById('cfg-imp-url');if(iu)iu.textContent=BATCH_URL;
+  var dd=document.getElementById('cfg-did');if(dd)dd.textContent=DEVICE_ID;
+  var sd=document.getElementById('cfg-sid');if(sd)sd.textContent=SCREEN_ID;
+  var gps=document.getElementById('cfg-gps');if(gps)gps.textContent=gpsLat?'ACTIVE':'WAITING';
+  var co=document.getElementById('cfg-coords');if(co)co.textContent=(gpsLat&&gpsLng)?gpsLat+','+gpsLng:'-';
+  var sc=document.getElementById('cfg-src-count');if(sc)sc.textContent=sources.length;
+  var sk=document.getElementById('cfg-streak');if(sk)sk.textContent=emptyStreak;
+  var cr=document.getElementById('cfg-corr');if(cr)cr.textContent=correlator;
+  updNetStatus();updQueueBadge();
+}
+function applySettings(){
+  var g=document.getElementById('cfg-gap');
+  if(g){MIN_GAP_MS=parseInt(g.value)*60000;var gc=document.getElementById('cfg-gap-cur');if(gc)gc.textContent=g.value+' min';}
+}
 
 setInterval(function(){
   var e=Math.floor((Date.now()-t0)/1000),h=Math.floor(e/3600),m=Math.floor((e%3600)/60),s=e%60;
@@ -480,6 +656,7 @@ setInterval(function(){
   if(cdown){var left=Math.max(0,Math.ceil((cdown-Date.now())/1000));st('s-next',left>0?left+'s':'now')}
   if(document.getElementById('pixel-panel').classList.contains('open')){
     st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',Object.keys(pixDest).length)}
+  if(document.getElementById('set-panel').classList.contains('open'))refreshSet();
 },1000);
 
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
@@ -610,7 +787,11 @@ function onDone(){
   playing=false;idx=0;setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
 
 document.addEventListener('click',function(e){
-  if(e.target.id==='btn-stats'||e.target.id==='btn-pixels')return;
+  var _id=e.target.id;
+  if(_id==='btn-stats'){toggleStats();return;}
+  if(_id==='btn-pixels'){togglePixels();return;}
+  if(_id==='btn-set'){toggleSet();return;}
+  if(_id==='btn-data'){toggleData();return;}
   if(document.getElementById('pixel-panel').classList.contains('open'))return;
   if(!playing&&adsManager)adsManager.start()});
 
