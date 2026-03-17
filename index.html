@@ -103,6 +103,7 @@
     <div class="sr"><span class="sl">Heartbeat</span><span class="sv" id="s-hb">-</span></div>
     <div class="sr"><span class="sl">HB Failures</span><span class="sv" id="s-hb-fail">0</span></div>
     <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
+    <div class="sr"><span class="sl">GPS</span><span class="sv" id="s-gps" style="color:#ff0">WAITING...</span></div>
   </div>
   <div class="sec"><div class="sec-t">Waterfall Sources</div><div id="source-list"></div></div>
   <div class="sec"><div class="sec-t">Events</div>
@@ -366,17 +367,34 @@ function sendImpression(adid,aid,duration,completed){
   });
 }
 
+function updateGpsStatus(s,c){var e=document.getElementById('s-gps');if(e){e.textContent=s;e.style.color=c||'#fff';}}
 function startGPS(){
-  if(!navigator.geolocation){log('GPS: not available','warn');return;}
-  navigator.geolocation.watchPosition(
-    function(pos){
-      gpsLat=pos.coords.latitude.toFixed(6);
-      gpsLng=pos.coords.longitude.toFixed(6);
-      gpsAge=Date.now();
-      log('GPS fix: '+gpsLat+','+gpsLng,'ok');
-    },
-    function(err){log('GPS err: '+err.message,'warn');},
-    {enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:10000}
+  if(!navigator.geolocation){log('GPS: not available','warn');updateGpsStatus('NO HARDWARE','#f44');return;}
+  function onFix(pos){
+    gpsLat=pos.coords.latitude.toFixed(6);
+    gpsLng=pos.coords.longitude.toFixed(6);
+    gpsAge=Date.now();
+    var acc=pos.coords.accuracy?Math.round(pos.coords.accuracy)+'m':'?';
+    log('GPS fix: '+gpsLat+','+gpsLng+' acc:'+acc,'ok');
+    updateGpsStatus(gpsLat+','+gpsLng+' ('+acc+')','#0f0');
+  }
+  function tryCoarse(){
+    log('GPS: trying coarse location (WiFi/cell)','warn');
+    updateGpsStatus('TRYING COARSE...','#ff0');
+    navigator.geolocation.getCurrentPosition(onFix,function(e2){
+      log('GPS coarse failed: '+e2.message+' code:'+e2.code,'err');
+      updateGpsStatus('FAILED - check OS location permission','#f44');
+    },{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});
+  }
+  function onErr(err){
+    log('GPS err code '+err.code+': '+err.message,'warn');
+    if(err.code===1){updateGpsStatus('PERMISSION DENIED','#f44');log('GPS: go to Settings > Location and allow','err');}
+    else if(err.code===2){updateGpsStatus('POSITION UNAVAILABLE','#ff0');tryCoarse();}
+    else if(err.code===3){updateGpsStatus('TIMEOUT','#ff0');tryCoarse();}
+  }
+  updateGpsStatus('ACQUIRING...','#ff0');
+  navigator.geolocation.watchPosition(onFix,onErr,
+    {enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000}
   );
 }
 
