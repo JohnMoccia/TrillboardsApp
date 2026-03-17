@@ -90,7 +90,7 @@
 <div id="ad-container">
   <video id="content-video" playsinline muted></video>
   <div id="ad-display"></div>
-  <div id="touch-blocker" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>
+  <div id="touch-blocker" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;" id="touch-blocker"></div>
 </div>
 <button id="btn-stats" onclick="toggleStats()">STATS</button>
 <button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
@@ -610,34 +610,12 @@ function parseVastPixels(xml){
   addEv('imp','VAST: '+urls.length+' tracking URLs parsed','');
 }
 
-// Block touch/click on ad to prevent pause
+// Block touch on ad-container to prevent pause — buttons are outside so not affected
 document.addEventListener('DOMContentLoaded',function(){
-  var blocker=document.getElementById('touch-blocker');
-  if(blocker){
-    blocker.addEventListener('touchstart',function(e){
-      var t=e.target.id;
-      if(t==='btn-stats'||t==='btn-pixels'||t==='btn-set'||t==='btn-data')return;
-      e.preventDefault();e.stopPropagation();
-    },true);
-    blocker.addEventListener('touchend',function(e){
-      var t=e.target.id;
-      if(t==='btn-stats'||t==='btn-pixels'||t==='btn-set'||t==='btn-data')return;
-      e.preventDefault();e.stopPropagation();
-    },true);
-    blocker.addEventListener('click',function(e){
-      var t=e.target.id;
-      if(t==='btn-stats'||t==='btn-pixels'||t==='btn-set'||t==='btn-data')return;
-      e.preventDefault();e.stopPropagation();
-    },true);
-  }
   var ad=document.getElementById('ad-container');
   if(ad){
-    ad.addEventListener('touchstart',function(e){
-      // only block if not hitting our buttons
-      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'&&e.target.id!=='btn-set'&&e.target.id!=='btn-data'){
-        e.preventDefault();
-      }
-    },{passive:false});
+    ad.addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
+    ad.addEventListener('touchend',function(e){e.preventDefault();},{passive:false});
   }
 });
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
