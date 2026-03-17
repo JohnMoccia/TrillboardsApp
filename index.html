@@ -91,12 +91,6 @@
   <video id="content-video" playsinline muted style="pointer-events:none;"></video>
   <div id="ad-display" style="pointer-events:none;"></div>
 </div>
-<button id="btn-stats" onclick="toggleStats()">STATS</button>
-<button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
-<button id="btn-set" onclick="toggleSet()">SET</button>
-<button id="btn-data" onclick="toggleData()">DATA</button>
-<div class="oq-badge" id="oq-badge">0 QUEUED</div>
-
 <!-- Settings panel -->
 <div id="set-panel">
   <div class="ptitle">SETTINGS</div>
@@ -778,5 +772,10 @@ document.addEventListener('click',function(e){
 
 window.addEventListener('load',function(){log('IMA: '+typeof google,'ok');fetchSources();sendHeartbeat();setInterval(sendHeartbeat,60000);startGPS();});
 </script>
+<button id="btn-stats" onclick="toggleStats()">STATS</button>
+<button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
+<button id="btn-set" onclick="toggleSet()">SET</button>
+<button id="btn-data" onclick="toggleData()">DATA</button>
+<div class="oq-badge" id="oq-badge">0 QUEUED</div>
 </body>
 </html>
