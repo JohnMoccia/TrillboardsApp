@@ -614,9 +614,21 @@ function parseVastPixels(xml){
 document.addEventListener('DOMContentLoaded',function(){
   var blocker=document.getElementById('touch-blocker');
   if(blocker){
-    blocker.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();},true);
-    blocker.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();},true);
-    blocker.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();},true);
+    blocker.addEventListener('touchstart',function(e){
+      var t=e.target.id;
+      if(t==='btn-stats'||t==='btn-pixels'||t==='btn-set'||t==='btn-data')return;
+      e.preventDefault();e.stopPropagation();
+    },true);
+    blocker.addEventListener('touchend',function(e){
+      var t=e.target.id;
+      if(t==='btn-stats'||t==='btn-pixels'||t==='btn-set'||t==='btn-data')return;
+      e.preventDefault();e.stopPropagation();
+    },true);
+    blocker.addEventListener('click',function(e){
+      var t=e.target.id;
+      if(t==='btn-stats'||t==='btn-pixels'||t==='btn-set'||t==='btn-data')return;
+      e.preventDefault();e.stopPropagation();
+    },true);
   }
   var ad=document.getElementById('ad-container');
   if(ad){
