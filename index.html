@@ -149,6 +149,8 @@ var correlator=Date.now();
 var emptyStreak=0;
 var lastImpTime=0;
 var MIN_GAP_MS=4*60*1000;
+var gpsLat=0,gpsLng=0,gpsAge=0;
+var GPS_MAX_AGE_MS=5*60*1000;
 var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
 var vid=document.getElementById('content-video');
 var adDiv=document.getElementById('ad-display');
@@ -364,6 +366,20 @@ function sendImpression(adid,aid,duration,completed){
   });
 }
 
+function startGPS(){
+  if(!navigator.geolocation){log('GPS: not available','warn');return;}
+  navigator.geolocation.watchPosition(
+    function(pos){
+      gpsLat=pos.coords.latitude.toFixed(6);
+      gpsLng=pos.coords.longitude.toFixed(6);
+      gpsAge=Date.now();
+      log('GPS fix: '+gpsLat+','+gpsLng,'ok');
+    },
+    function(err){log('GPS err: '+err.message,'warn');},
+    {enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:10000}
+  );
+}
+
 function sendHeartbeat(){
   fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({device_id:'P_691cbdd4b3117cb1b692f4ae',timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
@@ -492,7 +508,8 @@ function reqNext(){
   srcStats[s.name].req++;S.req++;updStats();
   var req=new google.ima.AdsRequest();
   var sep=s.vast_url.indexOf('?')>=0?'&':'?';
-  req.adTagUrl=s.vast_url+sep+'correlator='+correlator+'&ppid='+SCREEN_ID;
+  var geoStr=(gpsLat&&gpsLng)?'&lat='+gpsLat+'&long='+gpsLng+'&venuetype=4':'';
+  req.adTagUrl=s.vast_url+sep+'correlator='+correlator+'&ppid='+SCREEN_ID+geoStr;
   req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
   req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
   try{adsLoader.requestAds(req)}catch(e){
@@ -579,7 +596,7 @@ document.addEventListener('click',function(e){
   if(document.getElementById('pixel-panel').classList.contains('open'))return;
   if(!playing&&adsManager)adsManager.start()});
 
-window.addEventListener('load',function(){log('IMA: '+typeof google,'ok');fetchSources();sendHeartbeat();setInterval(sendHeartbeat,60000);});
+window.addEventListener('load',function(){log('IMA: '+typeof google,'ok');fetchSources();sendHeartbeat();setInterval(sendHeartbeat,60000);startGPS();});
 </script>
 </body>
 </html>
