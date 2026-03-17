@@ -88,9 +88,8 @@
 </head>
 <body>
 <div id="ad-container">
-  <video id="content-video" playsinline muted></video>
-  <div id="ad-display"></div>
-  <div id="touch-blocker" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;" id="touch-blocker"></div>
+  <video id="content-video" playsinline muted style="pointer-events:none;"></video>
+  <div id="ad-display" style="pointer-events:none;"></div>
 </div>
 <button id="btn-stats" onclick="toggleStats()">STATS</button>
 <button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
@@ -610,14 +609,7 @@ function parseVastPixels(xml){
   addEv('imp','VAST: '+urls.length+' tracking URLs parsed','');
 }
 
-// Block touch on ad-container to prevent pause — buttons are outside so not affected
-document.addEventListener('DOMContentLoaded',function(){
-  var ad=document.getElementById('ad-container');
-  if(ad){
-    ad.addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
-    ad.addEventListener('touchend',function(e){e.preventDefault();},{passive:false});
-  }
-});
+// No JS touch blocking needed — CSS handles ad pause prevention
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
 function togglePixels(){var p=document.getElementById('pixel-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshPP()}
 function toggleSet(){var p=document.getElementById('set-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshSet()}
@@ -782,8 +774,7 @@ document.addEventListener('click',function(e){
   if(_id==='btn-pixels'){togglePixels();return;}
   if(_id==='btn-set'){toggleSet();return;}
   if(_id==='btn-data'){toggleData();return;}
-  if(document.getElementById('pixel-panel').classList.contains('open'))return;
-  if(!playing&&adsManager)adsManager.start()});
+});
 
 window.addEventListener('load',function(){log('IMA: '+typeof google,'ok');fetchSources();sendHeartbeat();setInterval(sendHeartbeat,60000);startGPS();});
 </script>
