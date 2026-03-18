@@ -243,7 +243,7 @@ var INTERVAL=10000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=8000,FORCED_SOURCE=0;
 var correlator=Date.now();
 var emptyStreak=0;
 var lastImpTime=0;
-var MIN_GAP_MS=2*60*1000;
+// MIN_GAP_MS removed — using INTERVAL for consistent pacing
 var gpsLat=0,gpsLng=0,gpsAge=0,GPS_MAX_AGE_MS=5*60*1000;
 var UI_HIDDEN=false,TEST_MODE=false,BRIGHTNESS=100,FONT_SIZE=11;
 var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
@@ -747,11 +747,7 @@ function reqNext(){
     log('All exhausted (streak '+emptyStreak+') - '+Math.round(backoff/1000)+'s','warn');
     setNP('NO FILL','Streak '+emptyStreak+' — retry in '+Math.round(backoff/1000)+'s');
     idx=0;updStats();sched(backoff);return}
-  var now=Date.now();
-  if(lastImpTime>0&&(now-lastImpTime)<MIN_GAP_MS){
-    var wait=MIN_GAP_MS-(now-lastImpTime);
-    log('Pacing: '+Math.round(wait/1000)+'s remaining','warn');
-    setNP('PACING','Next ad in '+Math.round(wait/1000)+'s');sched(wait);return;}
+
   var s=sources[idx];
   log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
   srcStats[s.name].req++;S.req++;updStats();
@@ -789,7 +785,7 @@ function onLoaded(event){
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;updStats();resolveAdAndSend(true,10);lastImpTime=Date.now();emptyStreak=0;correlator=Date.now();},false);
+    S.done++;updStats();resolveAdAndSend(true,10);emptyStreak=0;correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     adsManager.updateAdsRenderingSettings(rs);
