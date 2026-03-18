@@ -237,6 +237,8 @@ var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
 var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
 var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
+var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
+var KV_SECRET='curb2026';
 var INTERVAL=10000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=8000,FORCED_SOURCE=0;
 var correlator=Date.now();
 var emptyStreak=0;
@@ -273,6 +275,26 @@ window.addEventListener('offline',function(){
   document.getElementById('offline-badge').classList.add('show');
   log('Network offline — impressions will queue','warn');
 });
+
+// ── KV Dual-Post ─────────────────────────────────────────────────────────────
+function logToKV(adid, durationSec, completed, impressionId) {
+  fetch(KV_URL, {
+    method: 'POST',
+    headers: {
+      'X-Proxy-Secret': KV_SECRET,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      ad_id: adid || 'unknown',
+      screen_id: SCREEN_ID,
+      device_id: DEVICE_ID,
+      duration_ms: (durationSec || 0) * 1000,
+      completed: !!completed,
+      impression_id: impressionId || ''
+    })
+  }).catch(function(e) { log('KV log: ' + e.message, 'warn'); });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function flushQueue(){
   if(!isOnline||offlineQueue.length===0)return;
@@ -345,6 +367,14 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
       if(txt&&txt.length>0){log('RESP: '+txt.substring(0,300),'resp');}
       addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
       addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
+      // Dual-post to our KV log for reconciliation
+      if (ok && attempt === 0) {
+        try {
+          var rd = JSON.parse(txt);
+          var impId = (rd.data && rd.data.proofs && rd.data.proofs[0]) ? rd.data.proofs[0].impression_id : '';
+          logToKV(adid, durationSec, completed, impId);
+        } catch(e2) { logToKV(adid, durationSec, completed, ''); }
+      }
       // If Trillboards returns non-2xx, retry
       if(!ok&&attempt<3){
         var delay=[0,2000,4000,8000][attempt+1]||8000;
