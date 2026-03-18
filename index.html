@@ -249,7 +249,7 @@ var UI_HIDDEN=false,TEST_MODE=false,BRIGHTNESS=100,FONT_SIZE=11;
 var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
 var vid=document.getElementById('content-video');
 var adDiv=document.getElementById('ad-display');
-var playing=false,t0=Date.now(),adT0=null,nextTimer=null,cdown=null;
+var playing=false,t0=Date.now(),adT0=null,nextTimer=null,cdown=null,watchdogTimer=null;
 var S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};
 var FLOOR_CPM=3.00;
 var DU={bytes:0,reqs:0,video:0,vast:0,pixels:0,hb:0,imp:0,api:0,adDurs:[],t0:Date.now()};
@@ -702,6 +702,18 @@ setInterval(function(){
   if(document.getElementById('pixel-panel').classList.contains('open')){st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',Object.keys(pixDest).length)}
 },1000);
 
+function clearWatchdog(){clearTimeout(watchdogTimer);watchdogTimer=null;}
+function startWatchdog(){
+  clearWatchdog();
+  watchdogTimer=setTimeout(function(){
+    var s=sources[idx];
+    log('WATCHDOG: '+(s?s.name:'?')+' timed out after '+WATERFALL_TIMEOUT/1000+'s — moving on','warn');
+    if(s){srcStats[s.name].err++;S.err++;}
+    playing=false;
+    if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
+    idx++;updStats();reqNext();
+  },WATERFALL_TIMEOUT);
+}
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
 
 function fetchSources(){
@@ -749,7 +761,7 @@ function reqNext(){
   req.adTagUrl=s.vast_url+sep+'correlator='+correlator+'&ppid='+SCREEN_ID+geoStr;
   req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
   req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
-  try{adsLoader.requestAds(req)}catch(e){log('Threw: '+s.name+' '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
+  try{adsLoader.requestAds(req);startWatchdog();}catch(e){log('Threw: '+s.name+' '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
 
 function onLoaded(event){
   var s=sources[idx];
@@ -765,7 +777,7 @@ function onLoaded(event){
     var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';var dur=cachedDur?cachedDur+'s':'?s';var hour=new Date().getHours();
     log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
     srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;fillByHour[hour].reqs++;
-    playing=true;adT0=Date.now();if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
+    clearWatchdog();playing=true;adT0=Date.now();if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
     setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
     S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
@@ -788,7 +800,7 @@ function onLoaded(event){
   }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
 
 function onErr(event){
-  var s=sources[idx];var er=event.getError?event.getError().toString():'unknown';
+  clearWatchdog();var s=sources[idx];var er=event.getError?event.getError().toString():'unknown';
   log('ERROR - '+(s?s.name:'?')+' - '+er.substring(0,60),'err');addEv('err','ERROR - '+(s?s.name:'?'),'');
   if(s){srcStats[s.name].err++;S.err++}
   playing=false;if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
