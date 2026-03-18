@@ -77,17 +77,14 @@
     .lfrow.err{border-left-color:#f44;color:#f44}.lfrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
     .lfdest{color:#333;font-size:9px;margin-top:1px;word-break:break-all}
     .du-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #111}
-    /* POST history */
     .ph-row{padding:4px 6px;margin:2px 0;border-radius:3px;background:#080808;border-left:3px solid #222;font-size:10px;cursor:pointer}
     .ph-row.ok{border-left-color:#0f0}.ph-row.fail{border-left-color:#f44}.ph-row.retry{border-left-color:#f0f}.ph-row.queued{border-left-color:#f80}
     .ph-detail{display:none;background:#030303;border-radius:3px;padding:6px;margin-top:4px;font-size:9px;word-break:break-all;color:#888}
     .ph-detail.open{display:block}
-    /* fill by hour */
     .fh-bar{display:flex;align-items:flex-end;gap:2px;height:40px;margin-top:4px}
     .fh-col{flex:1;background:#1a1a1a;border-radius:2px 2px 0 0;position:relative;min-width:6px}
     .fh-fill{background:#0f0;border-radius:2px 2px 0 0;width:100%;position:absolute;bottom:0}
     .fh-label{color:#333;font-size:8px;text-align:center;margin-top:2px}
-    /* offline badge */
     #offline-badge{display:none;position:fixed;top:50px;right:10px;z-index:9999;background:#f44;color:#fff;padding:4px 10px;font-size:10px;border-radius:4px;letter-spacing:1px}
     #offline-badge.show{display:block}
   </style>
@@ -208,23 +205,14 @@
     <div class="sr"><span class="sl">Heartbeat</span><span class="sv" id="s-hb">-</span></div>
     <div class="sr"><span class="sl">HB Failures</span><span class="sv" id="s-hb-fail">0</span></div>
     <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
-<div class="sr"><span class="sl">GPS</span><span class="sv" id="s-gps" style="color:#ff0">WAITING...</span></div>
+    <div class="sr"><span class="sl">GPS</span><span class="sv" id="s-gps" style="color:#ff0">WAITING...</span></div>
   </div>
-  <div class="sec"><div class="sec-t">Fill Rate by Hour</div>
-    <div id="fh-chart"></div>
-  </div>
-  <div class="sec"><div class="sec-t">Ad CPM Log</div>
-    <div id="cpm-log" class="scrollbox" style="max-height:100px"><div style="color:#444;padding:4px">No ads played yet</div></div>
-  </div>
-  <div class="sec"><div class="sec-t">POST History <span id="ph-queue-badge" style="display:none" class="badge b-queue">QUEUED</span></div>
-    <div id="post-history" class="scrollbox" style="max-height:180px"><div style="color:#444;padding:4px">No POSTs yet</div></div>
-  </div>
+  <div class="sec"><div class="sec-t">Fill Rate by Hour</div><div id="fh-chart"></div></div>
+  <div class="sec"><div class="sec-t">Ad CPM Log</div><div id="cpm-log" class="scrollbox" style="max-height:100px"><div style="color:#444;padding:4px">No ads played yet</div></div></div>
+  <div class="sec"><div class="sec-t">POST History <span id="ph-queue-badge" style="display:none" class="badge b-queue">QUEUED</span></div><div id="post-history" class="scrollbox" style="max-height:180px"><div style="color:#444;padding:4px">No POSTs yet</div></div></div>
   <div class="sec"><div class="sec-t">Waterfall Sources</div><div id="source-list"></div></div>
   <div class="sec"><div class="sec-t">Events</div>
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('ev')">EVENTS</div>
-      <div class="tab" onclick="switchTab('lg')">LOG</div>
-    </div>
+    <div class="tabs"><div class="tab active" onclick="switchTab('ev')">EVENTS</div><div class="tab" onclick="switchTab('lg')">LOG</div></div>
     <div id="tab-ev" class="scrollbox" style="max-height:200px"></div>
     <div id="tab-lg" class="scrollbox" style="max-height:200px;display:none"></div>
   </div>
@@ -269,11 +257,10 @@ var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
 var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
 var cpmLog=[],fillHistory=[],postHistory=[];
-// Fill by hour: index 0-23
 var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
 
 // ── Offline queue ─────────────────────────────────────────────────────────────
-var offlineQueue=[];   // [{adid,durationSec,completed,ts,retries}]
+var offlineQueue=[];
 var isOnline=navigator.onLine!==false;
 window.addEventListener('online',function(){
   isOnline=true;
@@ -304,7 +291,6 @@ function updQueueBadge(){
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Ad identity cache ─────────────────────────────────────────────────────────
 var cachedAdId='',cachedAid='',cachedDur=0;
 function cacheAdInfo(ad){
   if(!ad)return;
@@ -319,18 +305,13 @@ function resolveAdAndSend(completed,maxTries){
     try{ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;}catch(e){}
     if(ad)cacheAdInfo(ad);
     var adid=cachedAdId||'unknown';
-    if(adid==='unknown'&&tries<maxTries){
-      setTimeout(function(){attempt(tries+1);},100);return;
-    }
+    if(adid==='unknown'&&tries<maxTries){setTimeout(function(){attempt(tries+1);},100);return;}
     if(tries>0)log('resolveAd resolved after '+tries+' retries: '+adid,'ok');
     sendImpressionWithRetry(adid,cachedDur||0,completed,0,false);
   }
   attempt(0);
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-// ── sendImpression with retry + backoff + offline queue + response logging ────
-// Retry schedule: attempt 0 immediate, 1 after 2s, 2 after 4s, 3 after 8s
 function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
   if(!isOnline){
     offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:new Date().toISOString(),retries:attempt});
@@ -360,11 +341,8 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
       trackBytes('imp','imp',512);
       var ok=status>=200&&status<300;
       var label=ok?'Batch POST OK':'Batch POST ERR';
-      log(label+' ('+status+') '+( attempt>0?'[retry '+attempt+']':'')+' adid:'+adid,'ok');
-      // Log response body — this is where Trillboards error messages appear
-      if(txt&&txt.length>0){
-        log('RESP: '+txt.substring(0,300),'resp');
-      }
+      log(label+' ('+status+') '+(attempt>0?'[retry '+attempt+']':'')+' adid:'+adid,'ok');
+      if(txt&&txt.length>0){log('RESP: '+txt.substring(0,300),'resp');}
       addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
       addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
       // If Trillboards returns non-2xx, retry
@@ -382,7 +360,6 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
       log('Retrying in '+(delay/1000)+'s (attempt '+(attempt+1)+'/3)','warn');
       setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);
     } else {
-      // All retries exhausted — park in offline queue for next flush
       log('All retries exhausted — queuing for later: '+adid,'err');
       offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:ts,retries:attempt});
       updQueueBadge();
@@ -390,12 +367,7 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
   });
 }
 
-function addPostHistory(entry){
-  postHistory.unshift(entry);
-  if(postHistory.length>20)postHistory.pop();
-  rendPostHistory();
-}
-
+function addPostHistory(entry){postHistory.unshift(entry);if(postHistory.length>20)postHistory.pop();rendPostHistory();}
 function rendPostHistory(){
   var e=document.getElementById('post-history');if(!e)return;
   if(!postHistory.length){e.innerHTML='<div style="color:#444;padding:4px">No POSTs yet</div>';return;}
@@ -418,10 +390,8 @@ function rendPostHistory(){
     '</div>';
   }).join('');
 }
-
 function togPH(row){var d=row.querySelector('.ph-detail');if(d)d.classList.toggle('open');}
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-// ─────────────────────────────────────────────────────────────────────────────
 
 var oOpen=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,url){this._u=url;return oOpen.apply(this,arguments)};
@@ -467,17 +437,8 @@ function onRes(u,status){if(skip(u)||!isPix(u))return;
   if(pixDest[d]){if(ok)pixDest[d].ok++;else pixDest[d].dead++}
   if(!ok){S.dead++;addEv('dead','PIXEL DEAD: '+d+' ['+status+']',u);updStats()}}
 
-function addEv(type,msg,url){
-  var ts=new Date().toTimeString().substring(0,8);
-  pixEv.unshift({type:type,msg:msg,url:url,ts:ts});
-  if(pixEv.length>80)pixEv.pop();
-  rendEv();rendLF()}
-
-function log(msg,type){type=type||'dim';
-  var ts=new Date().toTimeString().substring(0,8);
-  logs.unshift({msg:msg,type:type,ts:ts});if(logs.length>150)logs.pop();
-  rendLog();console.log('[Curb] '+msg)}
-
+function addEv(type,msg,url){var ts=new Date().toTimeString().substring(0,8);pixEv.unshift({type:type,msg:msg,url:url,ts:ts});if(pixEv.length>80)pixEv.pop();rendEv();rendLF()}
+function log(msg,type){type=type||'dim';var ts=new Date().toTimeString().substring(0,8);logs.unshift({msg:msg,type:type,ts:ts});if(logs.length>150)logs.pop();rendLog();console.log('[Curb] '+msg)}
 function st(id,v){var e=document.getElementById(id);if(e)e.textContent=v}
 function setNP(s,d){st('nps',s);st('npd',d)}
 
@@ -493,15 +454,10 @@ function updStats(){
   var avgCpm=FLOOR_CPM;
   if(cpmLog.length>0){var sum=cpmLog.reduce(function(a,b){return a+b.cpm;},0);avgCpm=sum/cpmLog.length;}
   st('s-avg-cpm','$'+avgCpm.toFixed(2));
-  var rev=(S.done||0)*(avgCpm/1000);
-  st('s-rev','$'+rev.toFixed(4));
-  var hrs=(Date.now()-t0)/3600000;
-  var dayEst=hrs>0?(rev/hrs)*24:0;
-  st('s-rev-day','$'+dayEst.toFixed(2));
-  var re=document.getElementById('s-rate');
-  if(re){re.textContent=r+'%';re.className='sv '+(r>60?'green':r>30?'yellow':'red')}
-  var de=document.getElementById('s-dead');
-  if(de)de.className='sv '+(S.dead>0?'red':'green');
+  var rev=(S.done||0)*(avgCpm/1000);st('s-rev','$'+rev.toFixed(4));
+  var hrs=(Date.now()-t0)/3600000;var dayEst=hrs>0?(rev/hrs)*24:0;st('s-rev-day','$'+dayEst.toFixed(2));
+  var re=document.getElementById('s-rate');if(re){re.textContent=r+'%';re.className='sv '+(r>60?'green':r>30?'yellow':'red')}
+  var de=document.getElementById('s-dead');if(de)de.className='sv '+(S.dead>0?'red':'green');
   rendSrc();rendCpmLog();rendFillByHour();}
 
 function rendFillByHour(){
@@ -511,98 +467,54 @@ function rendFillByHour(){
   var bars=fillByHour.map(function(h,i){
     var pct=h.reqs>0?Math.round((h.fills/h.reqs)*100):0;
     var heightPct=h.fills>0?Math.round((h.fills/maxFills)*100):2;
-    var color=pct>60?'#0f0':pct>30?'#f80':'#f44';
-    if(h.reqs===0)color='#1a1a1a';
+    var color=pct>60?'#0f0':pct>30?'#f80':'#f44';if(h.reqs===0)color='#1a1a1a';
     var isCur=i===now;
-    return'<div class="fh-col" style="'+(isCur?'outline:1px solid #444;':'')+'" title="'+i+':00 — '+h.fills+' fills / '+h.reqs+' req ('+pct+'%)">'+
-      '<div class="fh-fill" style="height:'+heightPct+'%;background:'+color+'"></div></div>';
+    return'<div class="fh-col" style="'+(isCur?'outline:1px solid #444;':'')+'" title="'+i+':00 — '+h.fills+' fills / '+h.reqs+' req ('+pct+'%)"><div class="fh-fill" style="height:'+heightPct+'%;background:'+color+'"></div></div>';
   }).join('');
   var labels='<div style="display:flex;gap:2px;margin-top:2px">';
-  for(var i=0;i<24;i++){
-    labels+='<div class="fh-label" style="flex:1;min-width:6px;color:'+(i===now?'#fff':'#333')+'">'+(i%6===0?i:'')+'</div>';
-  }
+  for(var i=0;i<24;i++){labels+='<div class="fh-label" style="flex:1;min-width:6px;color:'+(i===now?'#fff':'#333')+'">'+(i%6===0?i:'')+'</div>';}
   labels+='</div>';
-  e.innerHTML='<div class="fh-bar">'+bars+'</div>'+labels+'<div style="color:#333;font-size:9px;margin-top:2px">Hover bar for hourly fill rate — highlighted = current hour</div>';}
+  e.innerHTML='<div class="fh-bar">'+bars+'</div>'+labels+'<div style="color:#333;font-size:9px;margin-top:2px">Hover bar for hourly fill rate</div>';}
 
 function rendCpmLog(){
   var e=document.getElementById('cpm-log');if(!e)return;
   if(!cpmLog.length){e.innerHTML='<div style="color:#444;padding:4px">No ads played yet</div>';return;}
   e.innerHTML=cpmLog.slice(0,20).map(function(c){
     var cpmColor=c.cpm>=4?'#0f0':c.cpm>=3?'#f80':'#f44';
-    return'<div style="padding:3px 2px;border-bottom:1px solid #0a0a0a;font-size:10px">'+
-      '<span style="color:#333">'+c.ts+'</span> '+
-      '<span style="color:'+cpmColor+';font-weight:bold">$'+c.cpm.toFixed(2)+' CPM</span> '+
-      '<span style="color:#888">'+c.dur+'s</span> '+
-      '<span style="color:#555">'+c.source+'</span>'+
-      (c.adv&&c.adv!=='?'?'<span style="color:#4af"> '+c.adv+'</span>':'')+
-      (c.deal?'<div style="color:#555;font-size:9px">deal:'+c.deal+'</div>':'')+
-    '</div>';
+    return'<div style="padding:3px 2px;border-bottom:1px solid #0a0a0a;font-size:10px"><span style="color:#333">'+c.ts+'</span> <span style="color:'+cpmColor+';font-weight:bold">$'+c.cpm.toFixed(2)+' CPM</span> <span style="color:#888">'+c.dur+'s</span> <span style="color:#555">'+c.source+'</span>'+(c.adv&&c.adv!=='?'?'<span style="color:#4af"> '+c.adv+'</span>':'')+(c.deal?'<div style="color:#555;font-size:9px">deal:'+c.deal+'</div>':'')+'</div>';
   }).join('');}
 
 function rendSrc(){var e=document.getElementById('source-list');if(!e||!sources.length)return;
   e.innerHTML=sources.map(function(s,i){
-    var ss=srcStats[s.name]||{req:0,fills:0,err:0};
-    var rate=ss.req>0?Math.round((ss.fills/ss.req)*100):0;
+    var ss=srcStats[s.name]||{req:0,fills:0,err:0};var rate=ss.req>0?Math.round((ss.fills/ss.req)*100):0;
     var cls='srow',badge='';
     if(i===idx&&playing){cls+=' active';badge='<span class="badge b-live">LIVE</span>'}
     else if(i===idx&&!playing){cls+=' trying';badge='<span class="badge b-try">TRY</span>'}
     else if(ss.fills>0){cls+=' filled';badge='<span class="badge b-fill">FILL</span>'}
     else if(ss.err>0&&ss.fills===0){cls+=' errored';badge='<span class="badge b-err">ERR</span>'}
-    return'<div class="'+cls+'"><div class="sname">'+(i+1)+'. '+s.name.toUpperCase()+badge+'</div>'+
-      '<div class="sstats">Req:'+ss.req+' Fill:'+ss.fills+' Err:'+ss.err+
-      ' Rate:<span class="'+(rate>60?'green':rate>30?'yellow':rate>0?'red':'')+'">'+ rate+'%</span></div></div>'
+    return'<div class="'+cls+'"><div class="sname">'+(i+1)+'. '+s.name.toUpperCase()+badge+'</div><div class="sstats">Req:'+ss.req+' Fill:'+ss.fills+' Err:'+ss.err+' Rate:<span class="'+(rate>60?'green':rate>30?'yellow':rate>0?'red':'')+'">'+rate+'%</span></div></div>'
   }).join('')}
 
-function rendEv(){var e=document.getElementById('tab-ev');if(!e)return;
-  e.innerHTML=pixEv.slice(0,40).map(function(e){
-    return'<div class="evrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
-
-function rendLog(){var e=document.getElementById('tab-lg');if(!e)return;
-  e.innerHTML=logs.slice(0,60).map(function(e){
-    return'<div class="logrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
-
-function rendLF(){var e=document.getElementById('pp-lf');if(!e)return;
-  e.innerHTML=pixEv.slice(0,50).map(function(e){
-    var d=e.url?'<div class="lfdest">to: '+dom(e.url)+'</div>':'';
-    return'<div class="lfrow '+e.type+'"><span style="color:#333">'+e.ts+'</span> '+e.msg+d+'</div>'
-  }).join('')||'<div style="color:#444;padding:8px">Waiting...</div>'}
+function rendEv(){var e=document.getElementById('tab-ev');if(!e)return;e.innerHTML=pixEv.slice(0,40).map(function(e){return'<div class="evrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
+function rendLog(){var e=document.getElementById('tab-lg');if(!e)return;e.innerHTML=logs.slice(0,60).map(function(e){return'<div class="logrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
+function rendLF(){var e=document.getElementById('pp-lf');if(!e)return;e.innerHTML=pixEv.slice(0,50).map(function(e){var d=e.url?'<div class="lfdest">to: '+dom(e.url)+'</div>':'';return'<div class="lfrow '+e.type+'"><span style="color:#333">'+e.ts+'</span> '+e.msg+d+'</div>'}).join('')||'<div style="color:#444;padding:8px">Waiting...</div>'}
 
 function refreshPP(){
   var testC=Object.keys(pixDest).filter(function(d){return pixDest[d].test}).length;
   var total=Object.keys(pixDest).length;
   st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',total);
   var be=document.getElementById('pp-billing');
-  if(be){if(testC>0){be.textContent='TEST';be.className='pp-card-v red'}
-    else if(total>0){be.textContent='PROD';be.className='pp-card-v green'}
-    else{be.textContent='?';be.className='pp-card-v'}}
+  if(be){if(testC>0){be.textContent='TEST';be.className='pp-card-v red'}else if(total>0){be.textContent='PROD';be.className='pp-card-v green'}else{be.textContent='?';be.className='pp-card-v'}}
   var ml=document.getElementById('pp-meta-list');
-  if(ml){
-    if(!adMeta.length){ml.innerHTML='<div style="color:#444;padding:8px">Wait for an ad to start playing</div>';}
-    else{
-      var metaHtml='<div style="color:#333;font-size:9px;margin-bottom:4px">'+adMetaTs+'</div>'+
-        adMeta.map(function(m){
-          return'<div style="display:flex;justify-content:space-between;border-bottom:1px solid #0a0a0a;padding:3px 0">'+
-            '<span style="color:#f80;font-size:10px;flex-shrink:0;margin-right:6px">'+m.k+'</span>'+
-            '<span style="color:#fff;font-size:10px;word-break:break-all;max-width:65%;text-align:right">'+m.v+'</span></div>';
-        }).join('');
-      if(vastPixels.length){
-        metaHtml+='<div style="color:#4af;font-size:9px;margin:8px 0 4px;letter-spacing:1px">VAST TRACKING URLS ('+vastPixels.length+')</div>'+
-          vastPixels.slice(0,20).map(function(p){
-            return'<div style="border-bottom:1px solid #0a0a0a;padding:2px 0">'+
-              '<span style="color:#555;font-size:9px">'+p.tag+': </span>'+
-              '<span style="color:#aaa;font-size:9px;word-break:break-all">'+p.url+'</span></div>';
-          }).join('');
-      }
-      ml.innerHTML=metaHtml;
-    }
-  }
+  if(ml){if(!adMeta.length){ml.innerHTML='<div style="color:#444;padding:8px">Wait for an ad to start playing</div>';}
+    else{var metaHtml='<div style="color:#333;font-size:9px;margin-bottom:4px">'+adMetaTs+'</div>'+adMeta.map(function(m){return'<div style="display:flex;justify-content:space-between;border-bottom:1px solid #0a0a0a;padding:3px 0"><span style="color:#f80;font-size:10px;flex-shrink:0;margin-right:6px">'+m.k+'</span><span style="color:#fff;font-size:10px;word-break:break-all;max-width:65%;text-align:right">'+m.v+'</span></div>';}).join('');
+      if(vastPixels.length){metaHtml+='<div style="color:#4af;font-size:9px;margin:8px 0 4px;letter-spacing:1px">VAST TRACKING URLS ('+vastPixels.length+')</div>'+vastPixels.slice(0,20).map(function(p){return'<div style="border-bottom:1px solid #0a0a0a;padding:2px 0"><span style="color:#555;font-size:9px">'+p.tag+': </span><span style="color:#aaa;font-size:9px;word-break:break-all">'+p.url+'</span></div>';}).join('');}
+      ml.innerHTML=metaHtml;}}
   var dl=document.getElementById('pp-dest-list');if(!dl)return;
   var doms=Object.keys(pixDest);
   if(!doms.length){dl.innerHTML='<div style="color:#444;padding:12px;text-align:center">No pixel traffic yet</div>';rendLF();return}
   dl.innerHTML=doms.map(function(domain){
-    var d=pixDest[domain];
-    var pp=pparams(d.urls[0]||'');
-    var collected=[];var su=d.urls[0]||'';
+    var d=pixDest[domain];var pp=pparams(d.urls[0]||'');var collected=[];var su=d.urls[0]||'';
     if(su.indexOf('ppid=')>=0||su.indexOf('screen_id=')>=0)collected.push({k:'Screen ID',v:'Identifies your screen'});
     if(su.indexOf('ifa=')>=0)collected.push({k:'Device ID (ifa)',v:'Hardware ID'});
     if(su.indexOf('city=')>=0)collected.push({k:'City / State',v:'Location'});
@@ -614,25 +526,11 @@ function refreshPP(){
     if(pp.p['pzoneid'])collected.push({k:'Zone ID',v:'Vidverto zone: '+pp.p['pzoneid']});
     if(pp.p['iu'])collected.push({k:'Ad Unit',v:decodeURIComponent(pp.p['iu'])});
     var chHtml=collected.map(function(c){return'<div class="ddrow"><span class="ddk">'+c.k+'</span><span class="ddv">'+c.v+'</span></div>'}).join('');
-    return'<div class="dcard" onclick="togDest(this)">'+
-      '<div style="display:flex;justify-content:space-between">'+
-        '<div><div class="dname">'+d.type+'</div><div class="ddomain">'+domain+'</div></div>'+
-        '<div style="text-align:right;font-size:10px"><div class="'+(d.dead>0?'red':'green')+'">'+d.ok+' ok / '+d.dead+' dead</div><div style="color:#444">'+d.count+' hits</div></div></div>'+
-      '<div class="dbadges">'+
-        (d.test?'<span class="dbadge db-test">TEST</span>':'<span class="dbadge db-prod">PROD</span>')+
-        (d.dead>0?'<span class="dbadge db-dead">'+d.dead+' DEAD</span>':'<span class="dbadge db-ok">HEALTHY</span>')+
-      '</div>'+
-      '<div class="ddetail">'+
-        (collected.length?'<div class="dd-sec">Data Collected</div>'+chHtml:'')+
-        (d.urls[0]?'<div class="dd-sec">Sample URL</div><div class="dd-url">'+d.urls[0].substring(0,250)+'</div>':'')+
-      '</div></div>'
+    return'<div class="dcard" onclick="togDest(this)"><div style="display:flex;justify-content:space-between"><div><div class="dname">'+d.type+'</div><div class="ddomain">'+domain+'</div></div><div style="text-align:right;font-size:10px"><div class="'+(d.dead>0?'red':'green')+'">'+d.ok+' ok / '+d.dead+' dead</div><div style="color:#444">'+d.count+' hits</div></div></div><div class="dbadges">'+(d.test?'<span class="dbadge db-test">TEST</span>':'<span class="dbadge db-prod">PROD</span>')+(d.dead>0?'<span class="dbadge db-dead">'+d.dead+' DEAD</span>':'<span class="dbadge db-ok">HEALTHY</span>')+'</div><div class="ddetail">'+(collected.length?'<div class="dd-sec">Data Collected</div>'+chHtml:'')+(d.urls[0]?'<div class="dd-sec">Sample URL</div><div class="dd-url">'+d.urls[0].substring(0,250)+'</div>':'')+'</div></div>'
   }).join('');rendLF()}
 
 function togDest(card){var d=card.querySelector('.ddetail');if(d)d.classList.toggle('open')}
-function switchTab(t){
-  document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';
-  document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
-  document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
+function switchTab(t){document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
 
 function sendHeartbeat(){
   fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
@@ -641,13 +539,8 @@ function sendHeartbeat(){
   }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});}
 
 function logAdCpm(ad,sourceName,advertiser){
-  var ts=new Date().toTimeString().substring(0,8);
-  var dur=cachedDur||0,tp='',deal='',cpm=FLOOR_CPM,system='';
-  try{var tpObj=ad&&ad.getTraffickingParameters?ad.getTraffickingParameters():{};
-    var cpmKeys=['cpm','CPM','price','Price','deal_price','bid_price','clearing_price'];
-    for(var i=0;i<cpmKeys.length;i++){if(tpObj[cpmKeys[i]]){var v=parseFloat(tpObj[cpmKeys[i]]);if(!isNaN(v)&&v>0){cpm=v;break;}}}
-    var tpKeys=Object.keys(tpObj);if(tpKeys.length>0)tp=tpKeys.map(function(k){return k+'='+tpObj[k];}).join(' ');
-  }catch(e){}
+  var ts=new Date().toTimeString().substring(0,8);var dur=cachedDur||0,tp='',deal='',cpm=FLOOR_CPM,system='';
+  try{var tpObj=ad&&ad.getTraffickingParameters?ad.getTraffickingParameters():{};var cpmKeys=['cpm','CPM','price','Price','deal_price','bid_price','clearing_price'];for(var i=0;i<cpmKeys.length;i++){if(tpObj[cpmKeys[i]]){var v=parseFloat(tpObj[cpmKeys[i]]);if(!isNaN(v)&&v>0){cpm=v;break;}}}var tpKeys=Object.keys(tpObj);if(tpKeys.length>0)tp=tpKeys.map(function(k){return k+'='+tpObj[k];}).join(' ');}catch(e){}
   try{deal=(ad&&ad.getDealId)?ad.getDealId():'';}catch(e){}
   try{system=(ad&&ad.getAdSystem)?ad.getAdSystem():'';}catch(e){}
   cpmLog.unshift({ts:ts,adId:cachedAdId,adv:advertiser||'?',dur:dur,source:sourceName,cpm:cpm,deal:deal,tp:tp,system:system});
@@ -655,8 +548,7 @@ function logAdCpm(ad,sourceName,advertiser){
   log('CPM: $'+cpm.toFixed(2)+' ad:'+cachedAdId+' src:'+sourceName+(deal?' deal:'+deal:''),'ok');}
 
 function dumpAdMeta(ad){
-  var ts=new Date().toTimeString().substring(0,8);
-  var info=[];
+  var ts=new Date().toTimeString().substring(0,8);var info=[];
   try{if(ad.getAdId&&ad.getAdId())info.push({k:'Ad ID',v:ad.getAdId()});}catch(e){}
   try{if(ad.getCreativeId&&ad.getCreativeId())info.push({k:'Creative ID',v:ad.getCreativeId()});}catch(e){}
   try{if(ad.getAdvertiserName&&ad.getAdvertiserName())info.push({k:'Advertiser',v:ad.getAdvertiserName()});}catch(e){}
@@ -667,12 +559,9 @@ function dumpAdMeta(ad){
   try{if(ad.getDuration)info.push({k:'Duration',v:Math.round(ad.getDuration())+'s'});}catch(e){}
   try{if(ad.getContentType&&ad.getContentType())info.push({k:'Content Type',v:ad.getContentType()});}catch(e){}
   try{if(ad.getWidth)info.push({k:'Size',v:ad.getWidth()+'x'+ad.getHeight()});}catch(e){}
-  try{var tp=ad.getTraffickingParameters?ad.getTraffickingParameters():{};var tpKeys=Object.keys(tp);
-    if(tpKeys.length>0)info.push({k:'Trafficking Params',v:tpKeys.map(function(k){return k+'='+tp[k];}).join(', ')});}catch(e){}
-  adMeta=info;adMetaTs=ts;
-  log('Ad meta: '+info.length+' fields','ok');
-  var src=sources[idx]||sources[0];
-  if(src&&src.vast_url)fetchVastPixels(src.vast_url);}
+  try{var tp=ad.getTraffickingParameters?ad.getTraffickingParameters():{};var tpKeys=Object.keys(tp);if(tpKeys.length>0)info.push({k:'Trafficking Params',v:tpKeys.map(function(k){return k+'='+tp[k];}).join(', ')});}catch(e){}
+  adMeta=info;adMetaTs=ts;log('Ad meta: '+info.length+' fields','ok');
+  var src=sources[idx]||sources[0];if(src&&src.vast_url)fetchVastPixels(src.vast_url);}
 
 function fetchVastPixels(vastUrl){
   log('Fetching VAST XML...','info');trackBytes('vast','vast',800);
@@ -689,8 +578,7 @@ function parseVastPixels(xml){
     var re2=new RegExp('<'+tag+'[^>]*>([^<]+)</'+tag+'>','gi');
     while((m=re2.exec(xml))!==null){var u=m[1].trim();if(u&&u.indexOf('http')===0)urls.push({tag:tag,url:u});}
   });
-  try{
-    var extRe=/<Extension[^>]*type="[^"]*price[^"]*"[^>]*>([\s\S]*?)<\/Extension>/gi,em;
+  try{var extRe=/<Extension[^>]*type="[^"]*price[^"]*"[^>]*>([\s\S]*?)<\/Extension>/gi,em;
     while((em=extRe.exec(xml))!==null){var pm=/<Price[^>]*>([\s\S]*?)<\/Price>/i.exec(em[1]);
       if(pm){var pv=parseFloat(pm[1].trim());if(!isNaN(pv)&&pv>0){log('VAST price: $'+pv.toFixed(2),'ok');if(cpmLog.length>0&&cpmLog[0].cpm===FLOOR_CPM)cpmLog[0].cpm=pv;}}}
   }catch(e){}
@@ -812,9 +700,7 @@ function reqNext(){
   clearTimeout(nextTimer);cdown=null;st('s-next','-');
   var hour=new Date().getHours();
   if(idx>=sources.length){
-    emptyStreak++;
-    fillHistory.push(0);
-    fillByHour[hour].reqs++;
+    emptyStreak++;fillHistory.push(0);fillByHour[hour].reqs++;
     var backoff=Math.min(INTERVAL*Math.pow(6,emptyStreak-1),30*60*1000);
     log('All exhausted (streak '+emptyStreak+') - '+Math.round(backoff/1000)+'s','warn');
     setNP('NO FILL','Streak '+emptyStreak+' — retry in '+Math.round(backoff/1000)+'s');
@@ -823,8 +709,7 @@ function reqNext(){
   if(lastImpTime>0&&(now-lastImpTime)<MIN_GAP_MS){
     var wait=MIN_GAP_MS-(now-lastImpTime);
     log('Pacing: '+Math.round(wait/1000)+'s remaining','warn');
-    setNP('PACING','Next ad in '+Math.round(wait/1000)+'s');
-    sched(wait);return;}
+    setNP('PACING','Next ad in '+Math.round(wait/1000)+'s');sched(wait);return;}
   var s=sources[idx];
   log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
   srcStats[s.name].req++;S.req++;updStats();
@@ -843,74 +728,43 @@ function onLoaded(event){
   adsManager=event.getAdsManager(vid);
   adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
   adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED,onDone,false);
-
-  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){
-    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}
-  },false);
-
+  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
     cachedAdId='';cachedAid='';cachedDur=0;cacheAdInfo(ad);
-    var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';
-    var dur=cachedDur?cachedDur+'s':'?s';
-    var hour=new Date().getHours();
-    log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');
-    addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
-    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;
-    fillHistory.push(1);
-    fillByHour[hour].fills++;fillByHour[hour].reqs++;
-    playing=true;adT0=Date.now();
-    if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
-    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);
-    logAdCpm(ad,s.name,adv);updStats();
-    if(ad)dumpAdMeta(ad);
-  },false);
-
+    var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';var dur=cachedDur?cachedDur+'s':'?s';var hour=new Date().getHours();
+    log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
+    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;fillByHour[hour].reqs++;
+    playing=true;adT0=Date.now();if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
+    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
     S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
-    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    if(ad)cacheAdInfo(ad);
-    sendImpressionWithRetry(cachedAdId||'unknown',cachedDur||0,false,0,false);
-  },false);
-
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);
+    sendImpressionWithRetry(cachedAdId||'unknown',cachedDur||0,false,0,false);},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){
-    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);addEv('q','75% - '+s.name,'');},false);
-
+  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);addEv('q','75% - '+s.name,'');},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;updStats();resolveAdAndSend(true,10);
-    lastImpTime=Date.now();
-    emptyStreak=0;
-    correlator=Date.now();
-  },false);
-
+    S.done++;updStats();resolveAdAndSend(true,10);lastImpTime=Date.now();emptyStreak=0;correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     adsManager.updateAdsRenderingSettings(rs);
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
-    setTimeout(function(){
-      var style=document.createElement('style');
-      style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}.ima-controls-div{display:none!important;}.ima-mute-button{display:none!important;}.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';
-      document.head.appendChild(style);},500);
+    setTimeout(function(){var style=document.createElement('style');style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}.ima-controls-div{display:none!important;}.ima-mute-button{display:none!important;}.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';document.head.appendChild(style);},500);
     idx=0;
   }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
 
 function onErr(event){
-  var s=sources[idx];
-  var er=event.getError?event.getError().toString():'unknown';
+  var s=sources[idx];var er=event.getError?event.getError().toString():'unknown';
   log('ERROR - '+(s?s.name:'?')+' - '+er.substring(0,60),'err');addEv('err','ERROR - '+(s?s.name:'?'),'');
   if(s){srcStats[s.name].err++;S.err++}
   playing=false;if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
   idx++;updStats();setTimeout(reqNext,500)}
 
-function onDone(){
-  log('Cycle done - next in '+INTERVAL/1000+'s','info');
-  playing=false;idx=0;setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
+function onDone(){log('Cycle done - next in '+INTERVAL/1000+'s','info');playing=false;idx=0;setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
 
 document.addEventListener('click',function(e){
   if(e.target.id==='btn-stats'||e.target.id==='btn-pixels')return;
@@ -920,22 +774,12 @@ document.addEventListener('click',function(e){
 function updateGpsStatus(s,c){var e=document.getElementById('s-gps');if(e){e.textContent=s;e.style.color=c||'#fff';}}
 function startGPS(){
   if(!navigator.geolocation){log('GPS: not available','warn');updateGpsStatus('NO HARDWARE','#f44');return;}
-  function onFix(pos){
-    gpsLat=pos.coords.latitude.toFixed(6);gpsLng=pos.coords.longitude.toFixed(6);gpsAge=Date.now();
-    var acc=pos.coords.accuracy?Math.round(pos.coords.accuracy)+'m':'?';
-    log('GPS fix: '+gpsLat+','+gpsLng+' acc:'+acc,'ok');
-    updateGpsStatus(gpsLat+','+gpsLng+' ('+acc+')','#0f0');}
-  function tryCoarse(){
-    log('GPS: trying coarse location','warn');updateGpsStatus('TRYING COARSE...','#ff0');
-    navigator.geolocation.getCurrentPosition(onFix,function(e2){
-      log('GPS coarse failed: '+e2.message,'err');updateGpsStatus('FAILED','#f44');
-    },{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});}
-  function onErr(err){
-    if(err.code===1){updateGpsStatus('PERMISSION DENIED','#f44');}
-    else{updateGpsStatus('TIMEOUT - trying coarse','#ff0');tryCoarse();}}
+  function onFix(pos){gpsLat=pos.coords.latitude.toFixed(6);gpsLng=pos.coords.longitude.toFixed(6);gpsAge=Date.now();var acc=pos.coords.accuracy?Math.round(pos.coords.accuracy)+'m':'?';log('GPS fix: '+gpsLat+','+gpsLng+' acc:'+acc,'ok');updateGpsStatus(gpsLat+','+gpsLng+' ('+acc+')','#0f0');}
+  function tryCoarse(){log('GPS: trying coarse location','warn');updateGpsStatus('TRYING COARSE...','#ff0');navigator.geolocation.getCurrentPosition(onFix,function(e2){log('GPS coarse failed: '+e2.message,'err');updateGpsStatus('FAILED','#f44');},{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});}
+  function onErr(err){if(err.code===1){updateGpsStatus('PERMISSION DENIED','#f44');}else{updateGpsStatus('TIMEOUT - trying coarse','#ff0');tryCoarse();}}
   updateGpsStatus('ACQUIRING...','#ff0');
-  navigator.geolocation.watchPosition(onFix,onErr,{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});
-}
+  navigator.geolocation.watchPosition(onFix,onErr,{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});}
+
 window.addEventListener('load',function(){
   try{
     var sc=function(k){try{return localStorage.getItem(k);}catch(e){return null;}};
@@ -955,7 +799,6 @@ window.addEventListener('load',function(){
   }catch(e){log('Settings load error: '+e.message,'warn');}
   log('IMA: '+typeof google,'ok');
   fetchSources();sendHeartbeat();setInterval(sendHeartbeat,HB_INTERVAL_MS);startGPS();
-  // Periodic queue flush attempt (every 60s)
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
 });
 </script>
