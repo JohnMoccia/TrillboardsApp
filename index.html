@@ -244,7 +244,6 @@ var INTERVAL=30000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=8000,FORCED_SOURCE=0;
 var MAX_PER_MIN=2; // rate cap: max 2 cycles/min per device
 var lastCycleMinute=-1,cyclesThisMinute=0;
 var correlator=Date.now();
-var emptyStreak=0;
 var lastImpTime=0;
 // MIN_GAP_MS removed — using INTERVAL for consistent pacing
 var gpsLat=0,gpsLng=0,gpsAge=0,GPS_MAX_AGE_MS=5*60*1000;
@@ -772,11 +771,10 @@ function reqNext(){
   clearTimeout(nextTimer);cdown=null;st('s-next','-');
   var hour=new Date().getHours();
   if(idx>=sources.length){
-    emptyStreak++;fillHistory.push(0);fillByHour[hour].reqs++;
-    var backoff=Math.min(INTERVAL*Math.pow(6,emptyStreak-1),30*60*1000);
-    log('All exhausted (streak '+emptyStreak+') - '+Math.round(backoff/1000)+'s','warn');
-    setNP('NO FILL','Streak '+emptyStreak+' — retry in '+Math.round(backoff/1000)+'s');
-    idx=0;updStats();sched(backoff);return}
+    fillHistory.push(0);fillByHour[hour].reqs++;
+    log('All exhausted — retry in '+INTERVAL/1000+'s','warn');
+    setNP('NO FILL','All sources failed — retry in '+INTERVAL/1000+'s');
+    idx=0;updStats();sched(INTERVAL);return}
 
   // Rate cap — only increment S.req on first DSP (idx=0) = one count per cycle
   if(idx===0){
@@ -828,7 +826,7 @@ function onLoaded(event){
     if(!cachedAdId||cachedAdId==='unknown'){log('COMPLETE — ad ID still unknown, sending with cached: '+cachedAdId,'warn');}
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p+' - adid:'+cachedAdId,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;updStats();resolveAdAndSend(true,10);emptyStreak=0;correlator=Date.now();},false);
+    S.done++;updStats();resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     adsManager.updateAdsRenderingSettings(rs);
