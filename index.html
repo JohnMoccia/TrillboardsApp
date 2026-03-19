@@ -87,6 +87,7 @@
     .fh-label{color:#333;font-size:8px;text-align:center;margin-top:2px}
     #offline-badge{display:none;position:fixed;top:50px;right:10px;z-index:9999;background:#f44;color:#fff;padding:4px 10px;font-size:10px;border-radius:4px;letter-spacing:1px}
     #offline-badge.show{display:block}
+    #config-badge{position:fixed;top:50px;left:10px;z-index:9999;background:rgba(0,255,200,.1);border:1px solid #0fc;color:#0fc;padding:3px 8px;font-size:9px;border-radius:4px;letter-spacing:1px}
   </style>
 </head>
 <body>
@@ -98,6 +99,7 @@
 </div>
 
 <div id="offline-badge">OFFLINE — QUEUING</div>
+<div id="config-badge">CFG: POLLING...</div>
 
 <!-- DATA PANEL -->
 <div id="data-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.97);z-index:10000;overflow-y:auto;padding:16px;font-family:monospace">
@@ -139,6 +141,18 @@
       <span style="color:#88f;font-size:14px;font-weight:bold;letter-spacing:2px">&#9881; SETTINGS</span>
       <span onclick="toggleSettings()" style="color:#555;font-size:22px;cursor:pointer;padding:0 8px">&#10005;</span>
     </div>
+    <!-- REMOTE CONFIG STATUS -->
+    <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">REMOTE CONFIG</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div><div style="color:#fff;font-size:12px">Config Source</div><div style="color:#444;font-size:10px">Settings pushed from dashboard override local</div></div>
+        <div id="set-cfg-status" style="color:#f80;font-size:10px">POLLING...</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #111"><span style="color:#555;font-size:10px">Last Fetched</span><span id="set-cfg-ts" style="color:#aaa;font-size:10px">never</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #111"><span style="color:#555;font-size:10px">Poll Interval</span><span id="set-cfg-poll" style="color:#aaa;font-size:10px">5 min</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#555;font-size:10px">KV Logging</span><span id="set-cfg-kv" style="color:#aaa;font-size:10px">enabled</span></div>
+      <button onclick="pollConfigNow()" style="width:100%;background:#001a1a;border:1px solid #003a3a;color:#0fc;padding:6px;border-radius:4px;cursor:pointer;font-size:10px;font-family:monospace;margin-top:8px">POLL NOW</button>
+    </div>
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">REVENUE</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="margin-bottom:10px">
@@ -149,8 +163,8 @@
     </div>
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">TIMING</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
-      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">AD INTERVAL (seconds)</div><div style="display:flex;gap:8px"><input id="set-interval" type="number" step="1" min="5" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('interval')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-interval-cur" style="color:#f80">10s</span></div></div>
-      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">HEARTBEAT INTERVAL (seconds)</div><div style="display:flex;gap:8px"><input id="set-hb" type="number" step="5" min="10" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('hb')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-hb-cur" style="color:#f80">30s</span> <span style="color:#333">(requires restart)</span></div></div>
+      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">AD INTERVAL (seconds)</div><div style="display:flex;gap:8px"><input id="set-interval" type="number" step="1" min="5" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('interval')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-interval-cur" style="color:#f80">30s</span></div></div>
+      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">HEARTBEAT INTERVAL (seconds)</div><div style="display:flex;gap:8px"><input id="set-hb" type="number" step="5" min="10" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('hb')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-hb-cur" style="color:#f80">30s</span></div></div>
       <div><div style="color:#555;font-size:10px;margin-bottom:4px">WATERFALL TIMEOUT (seconds)</div><div style="display:flex;gap:8px"><input id="set-timeout" type="number" step="1" min="3" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('timeout')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-timeout-cur" style="color:#f80">8s</span></div></div>
     </div>
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">DEVICE IDENTITY</div>
@@ -206,6 +220,7 @@
     <div class="sr"><span class="sl">Heartbeat</span><span class="sv" id="s-hb">-</span></div>
     <div class="sr"><span class="sl">HB Failures</span><span class="sv" id="s-hb-fail">0</span></div>
     <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
+    <div class="sr"><span class="sl">Remote Config</span><span class="sv" id="s-cfg" style="color:#0fc">POLLING...</span></div>
     <div class="sr"><span class="sl">GPS</span><span class="sv" id="s-gps" style="color:#ff0">WAITING...</span></div>
   </div>
   <div class="sec"><div class="sec-t">Fill Rate by Hour</div><div id="fh-chart"></div></div>
@@ -232,20 +247,19 @@
   <div class="pp-sec"><div class="pp-sec-t">Pixel Destinations</div><div id="pp-dest-list"><div style="color:#444;padding:12px;text-align:center">No pixel traffic yet</div></div></div>
   <div class="pp-sec"><div class="pp-sec-t">Live Pixel Feed</div><div class="lf" id="pp-lf"><div style="color:#444;padding:8px">Waiting...</div></div></div>
 </div>
-
 <script>
 var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
 var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
 var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
+var CONFIG_URL='https://trillboards-proxy.johnm-af2.workers.dev/get-config';
 var KV_SECRET='curb2026';
 var INTERVAL=30000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=8000,FORCED_SOURCE=0;
-var MAX_PER_MIN=2; // rate cap: max 2 cycles/min per device
+var MAX_PER_MIN=2;
 var lastCycleMinute=-1,cyclesThisMinute=0;
 var correlator=Date.now();
 var lastImpTime=0;
-// MIN_GAP_MS removed — using INTERVAL for consistent pacing
 var gpsLat=0,gpsLng=0,gpsAge=0,GPS_MAX_AGE_MS=5*60*1000;
 var UI_HIDDEN=false,TEST_MODE=false,BRIGHTNESS=100,FONT_SIZE=11;
 var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
@@ -263,7 +277,89 @@ var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
 var cpmLog=[],fillHistory=[],postHistory=[];
 var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
 
-// ── Offline queue ─────────────────────────────────────────────────────────────
+// ── Remote Config System ──────────────────────────────────────
+var REMOTE_CONFIG = {};
+var CONFIG_POLL_MS = 300000; // 5 min default, overridden by config
+var configPollTimer = null;
+var lastConfigTs = null;
+
+function applyRemoteConfig(cfg) {
+  if (!cfg) return;
+  REMOTE_CONFIG = cfg;
+  if (cfg.floor_cpm != null && !isNaN(cfg.floor_cpm)) {
+    FLOOR_CPM = parseFloat(cfg.floor_cpm);
+    var sf = document.getElementById('s-floor'); if (sf) sf.textContent = '$' + FLOOR_CPM.toFixed(2);
+    var cc = document.getElementById('set-cpm-cur'); if (cc) cc.textContent = '$' + FLOOR_CPM.toFixed(2);
+  }
+  if (cfg.interval != null && cfg.interval >= 5) {
+    INTERVAL = parseInt(cfg.interval) * 1000;
+    var ic = document.getElementById('set-interval-cur'); if (ic) ic.textContent = cfg.interval + 's';
+  }
+  if (cfg.hb_interval != null && cfg.hb_interval >= 10) {
+    HB_INTERVAL_MS = parseInt(cfg.hb_interval) * 1000;
+    var hc = document.getElementById('set-hb-cur'); if (hc) hc.textContent = cfg.hb_interval + 's';
+  }
+  if (cfg.waterfall_timeout != null && cfg.waterfall_timeout >= 3) {
+    WATERFALL_TIMEOUT = parseInt(cfg.waterfall_timeout) * 1000;
+    var tc = document.getElementById('set-timeout-cur'); if (tc) tc.textContent = cfg.waterfall_timeout + 's';
+  }
+  if (cfg.force_source != null) {
+    FORCED_SOURCE = parseInt(cfg.force_source) || 0;
+    var fc = document.getElementById('set-force-cur'); if (fc) fc.textContent = FORCED_SOURCE ? 'Source ' + FORCED_SOURCE : 'auto';
+  }
+  if (cfg.test_mode != null) {
+    TEST_MODE = !!cfg.test_mode;
+    var tb = document.getElementById('set-test-btn');
+    if (tb) { tb.textContent = TEST_MODE ? 'ON' : 'OFF'; tb.style.color = TEST_MODE ? '#0f0' : '#aaa'; }
+  }
+  if (cfg.config_poll_interval != null && cfg.config_poll_interval >= 30) {
+    CONFIG_POLL_MS = parseInt(cfg.config_poll_interval) * 1000;
+  }
+  // Update config badge and settings panel status
+  lastConfigTs = new Date().toTimeString().substring(0, 8);
+  var badge = document.getElementById('config-badge');
+  if (badge) badge.textContent = 'CFG: OK ' + lastConfigTs;
+  var cfgStatus = document.getElementById('set-cfg-status'); if (cfgStatus) cfgStatus.textContent = 'OK';
+  var cfgTs = document.getElementById('set-cfg-ts'); if (cfgTs) cfgTs.textContent = lastConfigTs;
+  var cfgPoll = document.getElementById('set-cfg-poll'); if (cfgPoll) cfgPoll.textContent = Math.round(CONFIG_POLL_MS / 1000) + 's';
+  var cfgKv = document.getElementById('set-cfg-kv'); if (cfgKv) cfgKv.textContent = cfg.kv_enabled === false ? 'disabled' : 'enabled';
+  var sCfg = document.getElementById('s-cfg');
+  if (sCfg) { sCfg.textContent = 'OK ' + lastConfigTs; sCfg.style.color = '#0f0'; }
+  log('Remote config applied — kv:' + (cfg.kv_enabled !== false) + ' err_log:' + (cfg.error_logging !== false) + ' cpm:' + cfg.floor_cpm + ' interval:' + cfg.interval, 'ok');
+}
+
+function pollConfig() {
+  clearTimeout(configPollTimer);
+  fetch(CONFIG_URL + '?_=' + Date.now(), {
+    headers: { 'X-Proxy-Secret': KV_SECRET }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.success && data.config) {
+      applyRemoteConfig(data.config);
+    } else {
+      log('Config poll: no config yet — using defaults', 'warn');
+    }
+    configPollTimer = setTimeout(pollConfig, CONFIG_POLL_MS);
+  })
+  .catch(function(e) {
+    log('Config poll failed: ' + e.message, 'warn');
+    var badge = document.getElementById('config-badge');
+    if (badge) badge.textContent = 'CFG: FAIL';
+    var sCfg = document.getElementById('s-cfg');
+    if (sCfg) { sCfg.textContent = 'FAIL'; sCfg.style.color = '#f44'; }
+    configPollTimer = setTimeout(pollConfig, CONFIG_POLL_MS);
+  });
+}
+
+function pollConfigNow() {
+  log('Manual config poll...', 'info');
+  clearTimeout(configPollTimer);
+  pollConfig();
+}
+// ─────────────────────────────────────────────────────────────
+
+// ── Offline queue ─────────────────────────────────────────────
 var offlineQueue=[];
 var isOnline=navigator.onLine!==false;
 window.addEventListener('online',function(){
@@ -278,14 +374,12 @@ window.addEventListener('offline',function(){
   log('Network offline — impressions will queue','warn');
 });
 
-// ── KV Dual-Post ─────────────────────────────────────────────────────────────
+// ── KV Dual-Post ─────────────────────────────────────────────
 function logToKV(adid, durationSec, completed, impressionId) {
+  if (REMOTE_CONFIG.kv_enabled === false) return; // master switch
   fetch(KV_URL, {
     method: 'POST',
-    headers: {
-      'X-Proxy-Secret': KV_SECRET,
-      'Content-Type': 'application/json'
-    },
+    headers: { 'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ad_id: adid || 'unknown',
       screen_id: SCREEN_ID,
@@ -300,7 +394,26 @@ function logToKV(adid, durationSec, completed, impressionId) {
     log('KV log FAIL: ' + e.message, 'err');
   });
 }
-// ─────────────────────────────────────────────────────────────────────────────
+
+function logErrorToKV(adid, durationSec, completed, status, body) {
+  if (REMOTE_CONFIG.error_logging === false) return; // error logging switch
+  fetch(KV_URL, {
+    method: 'POST',
+    headers: { 'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'error',
+      ad_id: adid || 'unknown',
+      screen_id: SCREEN_ID,
+      device_id: DEVICE_ID,
+      duration_ms: (durationSec || 0) * 1000,
+      completed: !!completed,
+      impression_id: '',
+      error_status: status,
+      error_body: String(body || '').substring(0, 200)
+    })
+  }).catch(function(){});
+}
+// ─────────────────────────────────────────────────────────────
 
 function flushQueue(){
   if(!isOnline||offlineQueue.length===0)return;
@@ -317,7 +430,6 @@ function updQueueBadge(){
   if(b){b.style.display=offlineQueue.length>0?'inline-block':'none';b.textContent=offlineQueue.length+' QUEUED';}
   if(q)q.textContent=offlineQueue.length;
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 var cachedAdId='',cachedAid='',cachedDur=0;
 function cacheAdInfo(ad){
@@ -328,7 +440,6 @@ function cacheAdInfo(ad){
 }
 function resolveAdAndSend(completed,maxTries){
   maxTries=maxTries||10;
-  // If we already have a cached ad ID, send immediately
   if(cachedAdId&&cachedAdId!=='unknown'){
     sendImpressionWithRetry(cachedAdId,cachedDur||0,completed,0,false);
     return;
@@ -379,19 +490,23 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
       if(txt&&txt.length>0){log('RESP: '+txt.substring(0,300),'resp');}
       addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
       addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
-      // Dual-post to our KV log for reconciliation (fires on any successful POST)
+
       if (ok) {
+        // Success — log to KV
         try {
           var rd = JSON.parse(txt);
           var impId = (rd.data && rd.data.proofs && rd.data.proofs[0]) ? rd.data.proofs[0].impression_id : '';
           logToKV(adid, durationSec, completed, impId);
         } catch(e2) { logToKV(adid, durationSec, completed, ''); }
-      }
-      // If Trillboards returns non-2xx, retry
-      if(!ok&&attempt<3){
-        var delay=[0,2000,4000,8000][attempt+1]||8000;
-        log('Retrying in '+(delay/1000)+'s (attempt '+(attempt+1)+'/3)','warn');
-        setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);
+      } else {
+        // Non-2xx — log error to KV so dashboard shows it
+        logErrorToKV(adid, durationSec, completed, status, txt);
+        // Retry logic
+        if(attempt<3){
+          var delay=[0,2000,4000,8000][attempt+1]||8000;
+          log('Retrying in '+(delay/1000)+'s (attempt '+(attempt+1)+'/3)','warn');
+          setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);
+        }
       }
     });
   }).catch(function(e){
@@ -452,7 +567,7 @@ window.fetch=function(input,opts){
   return p};
 
 function skip(u){if(!u||typeof u!=='string')return true;
-  return u.indexOf('trillboards.com/v1')>=0||u.indexOf('imasdk.googleapis')>=0||u.indexOf('localhost')>=0}
+  return u.indexOf('trillboards.com/v1')>=0||u.indexOf('imasdk.googleapis')>=0||u.indexOf('localhost')>=0||u.indexOf('workers.dev')>=0}
 function isPix(u){return u.indexOf('pixel')>=0||u.indexOf('doubleclick')>=0||u.indexOf('vidverto')>=0||u.indexOf('adipolo')>=0||u.indexOf('aioo')>=0||u.indexOf('voisetech')>=0||u.indexOf('googleads')>=0}
 function dom(u){try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return u.substring(0,40)}}
 function ptype(u){
@@ -579,7 +694,6 @@ function sendHeartbeat(){
     body:JSON.stringify({device_id:DEVICE_ID,timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
   }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}trackBytes('hb','hb',256);log('HB OK ('+r.status+')','ok');return r.json();
   }).then(function(data){
-    // Read refresh_interval from server and apply — never go below 30s
     if(data&&data.refresh_interval){var ms=Math.max(30000,data.refresh_interval*1000);if(ms!==HB_INTERVAL_MS){HB_INTERVAL_MS=ms;log('HB interval updated to '+(ms/1000)+'s from server','info');var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=Math.round(ms/1000)+'s';}}
   }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});}
 
@@ -681,6 +795,11 @@ function loadSettingsUI(){
     var tb=document.getElementById('set-test-btn');if(tb){tb.textContent=TEST_MODE?'ON':'OFF';tb.style.color=TEST_MODE?'#0f0':'#aaa';}
     var br=document.getElementById('set-bright');if(br)br.value=BRIGHTNESS;
     var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=BRIGHTNESS;
+    // Remote config status
+    var cfgStatus=document.getElementById('set-cfg-status');if(cfgStatus)cfgStatus.textContent=lastConfigTs?'OK':'POLLING...';
+    var cfgTs=document.getElementById('set-cfg-ts');if(cfgTs)cfgTs.textContent=lastConfigTs||'never';
+    var cfgPoll=document.getElementById('set-cfg-poll');if(cfgPoll)cfgPoll.textContent=Math.round(CONFIG_POLL_MS/1000)+'s';
+    var cfgKv=document.getElementById('set-cfg-kv');if(cfgKv)cfgKv.textContent=REMOTE_CONFIG.kv_enabled===false?'disabled':'enabled';
   }catch(e){console.log('loadSettingsUI error:',e);}}
 
 function saveSetting(key){
@@ -688,7 +807,7 @@ function saveSetting(key){
   switch(key){
     case 'cpm':el=document.getElementById('set-cpm');if(!el)return;val=parseFloat(el.value);if(isNaN(val)||val<=0)return;FLOOR_CPM=val;try{localStorage.setItem('curb_cpm',val);}catch(e){}var cc=document.getElementById('set-cpm-cur');if(cc)cc.textContent='$'+val.toFixed(2);var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+val.toFixed(2);log('CPM set to $'+val.toFixed(2),'ok');break;
     case 'interval':el=document.getElementById('set-interval');if(!el)return;val=parseInt(el.value);if(isNaN(val)||val<5)return;INTERVAL=val*1000;try{localStorage.setItem('curb_interval',val);}catch(e){}var ic=document.getElementById('set-interval-cur');if(ic)ic.textContent=val+'s';log('Interval set to '+val+'s','ok');break;
-    case 'hb':el=document.getElementById('set-hb');if(!el)return;val=parseInt(el.value);if(isNaN(val)||val<10)return;HB_INTERVAL_MS=val*1000;try{localStorage.setItem('curb_hb',val);}catch(e){}var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=val+'s (restart required)';log('HB interval set to '+val+'s','ok');break;
+    case 'hb':el=document.getElementById('set-hb');if(!el)return;val=parseInt(el.value);if(isNaN(val)||val<10)return;HB_INTERVAL_MS=val*1000;try{localStorage.setItem('curb_hb',val);}catch(e){}var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=val+'s';log('HB interval set to '+val+'s','ok');break;
     case 'timeout':el=document.getElementById('set-timeout');if(!el)return;val=parseInt(el.value);if(isNaN(val)||val<3)return;WATERFALL_TIMEOUT=val*1000;try{localStorage.setItem('curb_timeout',val);}catch(e){}var tc=document.getElementById('set-timeout-cur');if(tc)tc.textContent=val+'s';log('Timeout set to '+val+'s','ok');break;
     case 'did':el=document.getElementById('set-did');if(!el)return;val=el.value.trim();if(!val)return;DEVICE_ID=val;HB_URL='https://api.trillboards.com/v1/partner/device/'+val+'/heartbeat';try{localStorage.setItem('curb_did',val);}catch(e){}var dc=document.getElementById('set-did-cur');if(dc)dc.textContent=val;log('Device ID: '+val,'ok');break;
     case 'sid':el=document.getElementById('set-sid');if(!el)return;val=el.value.trim();if(!val)return;SCREEN_ID=val;try{localStorage.setItem('curb_sid',val);}catch(e){}var sc=document.getElementById('set-sid-cur');if(sc)sc.textContent=val;log('Screen ID: '+val,'ok');break;
@@ -741,10 +860,9 @@ function fetchSources(background){
     if(data.success&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
       sources=data.data.header_bidding_settings.vast_waterfall.sources;
       sources.sort(function(a,b){return a.priority-b.priority});
-      // Only init new stats entries — preserve existing counts
       sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
       log('Got '+sources.length+' sources'+(background?' (background)':''),'ok');rendSrc();
-      if(!background)initIMA(); // only start cycle on first load
+      if(!background)initIMA();
     }else{log('No sources — retry 30s','warn');if(!background){setNP('NO SOURCES','Retrying 30s');sched(30000);}}
   }).catch(function(e){log('API error: '+e.message,'err');if(!background){setNP('API ERROR',e.message);sched(30000);}})}
 
@@ -757,7 +875,6 @@ function initIMA(){
   adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
   idx=0;reqNext()}
 
-// Rebuild adsLoader cleanly between cycles to prevent listener stacking
 function rebuildLoader(){
   if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
   if(adsLoader){try{adsLoader.destroy();}catch(e){}adsLoader=null;}
@@ -775,8 +892,6 @@ function reqNext(){
     log('All exhausted — retry in '+INTERVAL/1000+'s','warn');
     setNP('NO FILL','All sources failed — retry in '+INTERVAL/1000+'s');
     idx=0;updStats();sched(INTERVAL);return}
-
-  // Rate cap — only increment S.req on first DSP (idx=0) = one count per cycle
   if(idx===0){
     var nowMin=Math.floor(Date.now()/60000);
     if(nowMin!==lastCycleMinute){lastCycleMinute=nowMin;cyclesThisMinute=0;}
@@ -809,7 +924,6 @@ function onLoaded(event){
     log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
     srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;fillByHour[hour].reqs++;
     clearWatchdog();playing=true;adT0=Date.now();if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
-    // Show player, hide idle screen
     document.getElementById('ad-container').style.display='block';
     document.getElementById('idle-screen').style.display='none';
     setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);},false);
@@ -821,7 +935,6 @@ function onLoaded(event){
   adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);addEv('q','75% - '+s.name,'');},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
-    // Final attempt to grab ad ID before IMA clears it
     try{var ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);}catch(e){}
     if(!cachedAdId||cachedAdId==='unknown'){log('COMPLETE — ad ID still unknown, sending with cached: '+cachedAdId,'warn');}
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
@@ -840,7 +953,6 @@ function onErr(event){
   clearWatchdog();var s=sources[idx];
   var er=event.getError?event.getError().toString():'unknown';
   var erCode=event.getError&&event.getError().getErrorCode?event.getError().getErrorCode():0;
-  // Distinguish no-fill (code 303/1205 = empty VAST) vs real error
   var noFill=(erCode===303||erCode===1205||er.indexOf('empty')>=0||er.indexOf('no ad')>=0||er.indexOf('VAST_EMPTY')>=0);
   var label=noFill?'NO FILL':'IMA ERROR';
   log(label+' - '+(s?s.name:'?')+' ['+erCode+'] - '+er.substring(0,60),'err');
@@ -853,10 +965,8 @@ function onErr(event){
   idx++;updStats();setTimeout(reqNext,500)}
 
 function onDone(){log('Cycle done - next in '+INTERVAL/1000+'s','info');playing=false;idx=0;
-  // Hide player, show idle screen between cycles
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
-  // Rebuild loader to prevent listener stacking across cycles
   rebuildLoader();
   setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
 
@@ -892,8 +1002,12 @@ window.addEventListener('load',function(){
     log('Settings loaded','info');
   }catch(e){log('Settings load error: '+e.message,'warn');}
   log('IMA: '+typeof google,'ok');
-  fetchSources();sendHeartbeat();setInterval(sendHeartbeat,HB_INTERVAL_MS);startGPS();
-  // Periodically re-fetch waterfall sources in background (every 1hr)
+  // Start all services
+  pollConfig();  // poll remote config on startup, then every CONFIG_POLL_MS
+  fetchSources();
+  sendHeartbeat();
+  setInterval(sendHeartbeat,HB_INTERVAL_MS);
+  startGPS();
   setInterval(function(){log('Hourly source refresh...','info');fetchSources(true);},3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
 });
