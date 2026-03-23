@@ -898,6 +898,7 @@ function reqNext(){
     if(nowMin!==lastCycleMinute){lastCycleMinute=nowMin;cyclesThisMinute=0;}
     if(cyclesThisMinute>=MAX_PER_MIN){log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn');sched(INTERVAL);return;}
     cyclesThisMinute++;S.req++;updStats();
+    if(REMOTE_CONFIG.kv_enabled!==false){fetch(KV_URL,{method:'POST',headers:{'X-Proxy-Secret':KV_SECRET,'Content-Type':'application/json'},body:JSON.stringify({type:'request',ad_id:'',screen_id:SCREEN_ID,device_id:DEVICE_ID,duration_ms:0,completed:false,impression_id:''})}).catch(function(){});}
   }
   var s=sources[idx];
   log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
