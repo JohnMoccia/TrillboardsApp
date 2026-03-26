@@ -1,20 +1,20 @@
 -- Merging decision tree log ---
 provider#androidx.core.content.FileProvider
-INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:9-14:20
+INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:9-19:20
 	android:grantUriPermissions
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:106-140
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:106-140
 	android:authorities
 		INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:19-80
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:19-80
 	android:exported
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:81-105
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:81-105
 	android:name
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:141-190
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:141-190
 manifest
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-21:12
-INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-21:12
-INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-21:12
-INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-21:12
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-27:12
+INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-27:12
+INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-27:12
+INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:2:1-27:12
 MERGED from [:CordovaLib] C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\CordovaLib\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:20:1-27:12
 MERGED from [androidx.appcompat:appcompat-resources:1.6.1] C:\Users\johnm\.gradle\caches\transforms-4\40ad9358a83e574d906453efc2a61e1c\transformed\jetified-appcompat-resources-1.6.1\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.appcompat:appcompat:1.6.1] C:\Users\johnm\.gradle\caches\transforms-4\03d10d25bdf91f1e03a4061a4963807b\transformed\appcompat-1.6.1\AndroidManifest.xml:17:1-22:12
@@ -76,9 +76,29 @@ uses-permission#android.permission.INTERNET
 ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:4:5-67
 	android:name
 		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:4:22-64
+uses-permission#android.permission.ACCESS_COARSE_LOCATION
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:5-81
+	android:name
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:22-78
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:5-79
+	android:name
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:22-76
+uses-permission#android.permission.WAKE_LOCK
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:5-68
+	android:name
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:22-65
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:5-77
+	android:name
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:5-92
+	android:name
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:22-89
 application
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:5-15:19
-INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:5-15:19
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:5-21:19
+INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:5-21:19
 MERGED from [androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:28:5-89
@@ -94,55 +114,67 @@ MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\jo
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:121-147
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:121-147
 	android:label
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:88-120
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:88-120
 	android:hardwareAccelerated
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:18-52
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:18-52
 	android:icon
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:53-87
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:53-87
 activity#com.curb.trillboards.MainActivity
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:9-11:20
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:9-16:20
 	android:label
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:160-197
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:160-197
 	android:launchMode
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:198-228
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:198-228
 	android:windowSoftInputMode
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:303-345
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:303-345
 	android:exported
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:136-159
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:136-159
 	android:configChanges
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:19-135
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:19-135
 	android:theme
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:257-302
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:257-302
 	android:name
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:229-256
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:229-256
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:13-10:29
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:13-15:29
 	android:label
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:28-65
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:28-65
 action#android.intent.action.MAIN
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:17-69
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:17-69
 	android:name
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:25-66
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:25-66
 category#android.intent.category.LAUNCHER
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:17-77
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:14:17-77
 	android:name
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:27-74
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:14:27-74
+service#com.curb.trillboards.AdService
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:9-169
+	android:enabled
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:18-40
+	android:exported
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:41-65
+	android:stopWithTask
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:138-166
+	android:foregroundServiceType
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:66-111
+	android:name
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:112-137
 queries
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:16:5-20:15
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:22:5-26:15
 intent#action:name:android.media.action.IMAGE_CAPTURE
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:9-19:18
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:23:9-25:18
 action#android.media.action.IMAGE_CAPTURE
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:13-73
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:24:13-73
 	android:name
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:21-70
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:24:21-70
 meta-data#android.support.FILE_PROVIDER_PATHS
-ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:13-130
+ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:13-130
 	android:resource
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:75-127
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:75-127
 	android:name
-		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:24-74
+		ADDED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:24-74
 uses-sdk
 INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml

@@ -92,6 +92,8 @@
 </head>
 <body>
 <div id="idle-screen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;z-index:1"><div style="color:#222;font-size:32px;letter-spacing:8px;text-transform:uppercase">CURB</div></div>
+<!-- Trillboards embed iframe — shown fullscreen when ad plays -->
+<iframe id="ad-frame" src="" allow="autoplay; fullscreen; geolocation" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:20"></iframe>
 <div id="ad-container" style="position:fixed;top:0;left:0;width:100%;height:100%;display:none">
   <video id="content-video" playsinline muted></video>
   <div id="ad-display"></div>
@@ -141,7 +143,6 @@
       <span style="color:#88f;font-size:14px;font-weight:bold;letter-spacing:2px">&#9881; SETTINGS</span>
       <span onclick="toggleSettings()" style="color:#555;font-size:22px;cursor:pointer;padding:0 8px">&#10005;</span>
     </div>
-    <!-- REMOTE CONFIG STATUS -->
     <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">REMOTE CONFIG</div>
     <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -222,6 +223,9 @@
     <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
     <div class="sr"><span class="sl">Remote Config</span><span class="sv" id="s-cfg" style="color:#0fc">POLLING...</span></div>
     <div class="sr"><span class="sl">GPS</span><span class="sv" id="s-gps" style="color:#ff0">WAITING...</span></div>
+    <!-- NEW: server-controlled timing visible in stats -->
+    <div class="sr"><span class="sl">Poll Interval (server)</span><span class="sv" id="s-poll-interval">60s</span></div>
+    <div class="sr"><span class="sl">Retry On Error (server)</span><span class="sv" id="s-retry-interval">30s</span></div>
   </div>
   <div class="sec"><div class="sec-t">Fill Rate by Hour</div><div id="fh-chart"></div></div>
   <div class="sec"><div class="sec-t">Ad CPM Log</div><div id="cpm-log" class="scrollbox" style="max-height:100px"><div style="color:#444;padding:4px">No ads played yet</div></div></div>
@@ -277,9 +281,20 @@ var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
 var cpmLog=[],fillHistory=[],postHistory=[];
 var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
 
+// ── NEW: server-controlled poll/retry intervals (overridden by /ads response) ──
+var POLL_INTERVAL_S = 60;   // default, overridden by data.poll_interval_s
+var RETRY_ON_ERROR_S = 30;  // default, overridden by data.retry_on_error_s
+
+function updServerIntervalDisplay() {
+  var sp = document.getElementById('s-poll-interval');
+  var sr = document.getElementById('s-retry-interval');
+  if (sp) sp.textContent = POLL_INTERVAL_S + 's';
+  if (sr) sr.textContent = RETRY_ON_ERROR_S + 's';
+}
+
 // ── Remote Config System ──────────────────────────────────────
 var REMOTE_CONFIG = {};
-var CONFIG_POLL_MS = 300000; // 5 min default, overridden by config
+var CONFIG_POLL_MS = 300000;
 var configPollTimer = null;
 var lastConfigTs = null;
 
@@ -315,7 +330,6 @@ function applyRemoteConfig(cfg) {
   if (cfg.config_poll_interval != null && cfg.config_poll_interval >= 30) {
     CONFIG_POLL_MS = parseInt(cfg.config_poll_interval) * 1000;
   }
-  // Update config badge and settings panel status
   lastConfigTs = new Date().toTimeString().substring(0, 8);
   var badge = document.getElementById('config-badge');
   if (badge) badge.textContent = 'CFG: OK ' + lastConfigTs;
@@ -325,39 +339,27 @@ function applyRemoteConfig(cfg) {
   var cfgKv = document.getElementById('set-cfg-kv'); if (cfgKv) cfgKv.textContent = cfg.kv_enabled === false ? 'disabled' : 'enabled';
   var sCfg = document.getElementById('s-cfg');
   if (sCfg) { sCfg.textContent = 'OK ' + lastConfigTs; sCfg.style.color = '#0f0'; }
-  log('Remote config applied — kv:' + (cfg.kv_enabled !== false) + ' err_log:' + (cfg.error_logging !== false) + ' cpm:' + cfg.floor_cpm + ' interval:' + cfg.interval, 'ok');
+  log('Remote config applied — kv:' + (cfg.kv_enabled !== false) + ' cpm:' + cfg.floor_cpm + ' interval:' + cfg.interval, 'ok');
 }
 
 function pollConfig() {
   clearTimeout(configPollTimer);
-  fetch(CONFIG_URL + '?_=' + Date.now(), {
-    headers: { 'X-Proxy-Secret': KV_SECRET }
-  })
+  fetch(CONFIG_URL + '?_=' + Date.now(), { headers: { 'X-Proxy-Secret': KV_SECRET } })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (data.success && data.config) {
-      applyRemoteConfig(data.config);
-    } else {
-      log('Config poll: no config yet — using defaults', 'warn');
-    }
+    if (data.success && data.config) { applyRemoteConfig(data.config); }
+    else { log('Config poll: no config yet — using defaults', 'warn'); }
     configPollTimer = setTimeout(pollConfig, CONFIG_POLL_MS);
   })
   .catch(function(e) {
     log('Config poll failed: ' + e.message, 'warn');
-    var badge = document.getElementById('config-badge');
-    if (badge) badge.textContent = 'CFG: FAIL';
-    var sCfg = document.getElementById('s-cfg');
-    if (sCfg) { sCfg.textContent = 'FAIL'; sCfg.style.color = '#f44'; }
+    var badge = document.getElementById('config-badge'); if (badge) badge.textContent = 'CFG: FAIL';
+    var sCfg = document.getElementById('s-cfg'); if (sCfg) { sCfg.textContent = 'FAIL'; sCfg.style.color = '#f44'; }
     configPollTimer = setTimeout(pollConfig, CONFIG_POLL_MS);
   });
 }
 
-function pollConfigNow() {
-  log('Manual config poll...', 'info');
-  clearTimeout(configPollTimer);
-  pollConfig();
-}
-// ─────────────────────────────────────────────────────────────
+function pollConfigNow() { log('Manual config poll...', 'info'); clearTimeout(configPollTimer); pollConfig(); }
 
 // ── Offline queue ─────────────────────────────────────────────
 var offlineQueue=[];
@@ -375,58 +377,90 @@ window.addEventListener('offline',function(){
 });
 
 // ── KV Dual-Post ─────────────────────────────────────────────
+// ── KV Logger — local persistent totals + immediate flush ──
+// localStorage totals survive restarts — 100% accurate day count
+var kvCount = 0;      // session count (resets on restart)
+var kvCompleted = 0;  // session completed (resets on restart)
+
+function getTodayKey() {
+  return 'kv_'+new Date().toISOString().slice(0,10); // e.g. kv_2026-03-26
+}
+
+function loadTodayTotals() {
+  try {
+    var key = getTodayKey();
+    var stored = JSON.parse(localStorage.getItem(key) || '{"count":0,"completed":0}');
+    return stored;
+  } catch(e) { return {count:0, completed:0}; }
+}
+
+function saveTodayTotals(count, completed) {
+  try {
+    var key = getTodayKey();
+    localStorage.setItem(key, JSON.stringify({count:count, completed:completed}));
+    // Clean up yesterday's key
+    var yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
+    localStorage.removeItem('kv_'+yesterday);
+  } catch(e) {}
+}
+
 function logToKV(adid, durationSec, completed, impressionId) {
-  if (REMOTE_CONFIG.kv_enabled === false) return; // master switch
+  if (REMOTE_CONFIG.kv_enabled === false) return;
+  kvCount++;
+  if(completed) kvCompleted++;
+  // Update persistent daily totals
+  var totals = loadTodayTotals();
+  totals.count++;
+  if(completed) totals.completed++;
+  saveTodayTotals(totals.count, totals.completed);
+  log('KV today total: '+totals.count+' ('+totals.completed+' completed) | session: '+kvCount, 'info');
+  flushKVBuffer(totals);
+}
+
+function flushKVBuffer(totals) {
+  totals = totals || loadTodayTotals();
+  if(totals.count === 0) return;
   fetch(KV_URL, {
     method: 'POST',
-    headers: { 'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json' },
+    headers: {'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json'},
     body: JSON.stringify({
-      ad_id: adid || 'unknown',
+      type: 'impression_count',
       screen_id: SCREEN_ID,
       device_id: DEVICE_ID,
-      duration_ms: (durationSec || 0) * 1000,
-      completed: !!completed,
-      impression_id: impressionId || ''
+      count: totals.count,
+      completed: totals.completed,
+      timestamp: new Date().toISOString()
     })
   }).then(function(r){
-    log('KV log OK ('+r.status+') adid:'+adid+' completed:'+completed,'ok');
-  }).catch(function(e) {
-    log('KV log FAIL: ' + e.message, 'err');
+    log('KV flush OK ('+r.status+') today total: '+totals.count+' ('+totals.completed+' completed)', 'ok');
+    var ts = new Date().toTimeString().substring(0,8);
+    postHistory.unshift({type:'kv-flush', source:'total:'+totals.count, status:r.status, ts:ts});
+    if(postHistory.length > 20) postHistory.pop();
+    rendPostHistory();
+  }).catch(function(e){
+    log('KV flush FAIL: '+e.message+' — will retry next impression', 'err');
   });
 }
 
 function logErrorToKV(adid, durationSec, completed, status, body) {
-  if (REMOTE_CONFIG.error_logging === false) return; // error logging switch
+  if (REMOTE_CONFIG.error_logging === false) return;
   fetch(KV_URL, {
     method: 'POST',
     headers: { 'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      type: 'error',
-      ad_id: adid || 'unknown',
-      screen_id: SCREEN_ID,
-      device_id: DEVICE_ID,
-      duration_ms: (durationSec || 0) * 1000,
-      completed: !!completed,
-      impression_id: '',
-      error_status: status,
-      error_body: String(body || '').substring(0, 200)
-    })
+    body: JSON.stringify({ type: 'error', ad_id: adid || 'unknown', screen_id: SCREEN_ID, device_id: DEVICE_ID, duration_ms: (durationSec || 0) * 1000, completed: !!completed, impression_id: '', error_status: status, error_body: String(body || '').substring(0, 200) })
   }).catch(function(){});
 }
-// ─────────────────────────────────────────────────────────────
 
 function flushQueue(){
   if(!isOnline||offlineQueue.length===0)return;
-  var item=offlineQueue.shift();
-  updQueueBadge();
+  var item=offlineQueue.shift();updQueueBadge();
   log('Flushing queued impression: '+item.adid,'info');
   sendImpressionWithRetry(item.adid,item.durationSec,item.completed,0,true);
   if(offlineQueue.length>0)setTimeout(flushQueue,500);
 }
 
 function updQueueBadge(){
-  var b=document.getElementById('ph-queue-badge');
-  var q=document.getElementById('s-queued');
+  var b=document.getElementById('ph-queue-badge'),q=document.getElementById('s-queued');
   if(b){b.style.display=offlineQueue.length>0?'inline-block':'none';b.textContent=offlineQueue.length+' QUEUED';}
   if(q)q.textContent=offlineQueue.length;
 }
@@ -440,18 +474,14 @@ function cacheAdInfo(ad){
 }
 function resolveAdAndSend(completed,maxTries){
   maxTries=maxTries||10;
-  if(cachedAdId&&cachedAdId!=='unknown'){
-    sendImpressionWithRetry(cachedAdId,cachedDur||0,completed,0,false);
-    return;
-  }
+  if(cachedAdId&&cachedAdId!=='unknown'){sendImpressionWithRetry(cachedAdId,cachedDur||0,completed,0,false);return;}
   function attempt(tries){
-    var ad=null;
-    try{ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;}catch(e){}
+    var ad=null;try{ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;}catch(e){}
     if(ad)cacheAdInfo(ad);
     var adid=cachedAdId||'unknown';
     if(adid==='unknown'&&tries<maxTries){setTimeout(function(){attempt(tries+1);},100);return;}
     if(tries>0)log('resolveAd resolved after '+tries+' retries: '+adid,'ok');
-    else if(adid==='unknown')log('resolveAd: could not resolve ad ID after '+maxTries+' tries','warn');
+    else if(adid==='unknown')log('resolveAd: could not resolve after '+maxTries+' tries','warn');
     sendImpressionWithRetry(adid,cachedDur||0,completed,0,false);
   }
   attempt(0);
@@ -460,67 +490,27 @@ function resolveAdAndSend(completed,maxTries){
 function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
   if(!isOnline){
     offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:new Date().toISOString(),retries:attempt});
-    updQueueBadge();
-    log('Offline — queued impression: '+adid+' (queue size: '+offlineQueue.length+')','warn');
-    addPostHistory({adid:adid,completed:completed,status:'queued',attempt:attempt,ts:new Date().toISOString(),body:'',resp:''});
-    return;
+    updQueueBadge();log('Offline — queued impression: '+adid+' (queue size: '+offlineQueue.length+')','warn');
+    addPostHistory({adid:adid,completed:completed,status:'queued',attempt:attempt,ts:new Date().toISOString(),body:'',resp:''});return;
   }
-  var body=JSON.stringify({
-    impressions:[{
-      screen_id:  SCREEN_ID,
-      device_id:  DEVICE_ID,
-      ad_id:      adid||'unknown',
-      timestamp:  new Date().toISOString(),
-      duration_ms:(durationSec||0)*1000,
-      completed:  !!completed
-    }]
-  });
+  var body=JSON.stringify({impressions:[{screen_id:SCREEN_ID,device_id:DEVICE_ID,ad_id:adid||'unknown',timestamp:new Date().toISOString(),duration_ms:(durationSec||0)*1000,completed:!!completed}]});
   var ts=new Date().toISOString();
-  fetch(BATCH_URL,{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
-    body:body
-  }).then(function(r){
-    var status=r.status;
-    return r.text().then(function(txt){
-      trackBytes('imp','imp',512);
-      var ok=status>=200&&status<300;
-      var label=ok?'Batch POST OK':'Batch POST ERR';
-      log(label+' ('+status+') '+(attempt>0?'[retry '+attempt+']':'')+' adid:'+adid,'ok');
+  fetch(BATCH_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},body:body})
+  .then(function(r){
+    var status=r.status;return r.text().then(function(txt){
+      trackBytes('imp','imp',512);var ok=status>=200&&status<300;
+      log((ok?'Batch POST OK':'Batch POST ERR')+' ('+status+') '+(attempt>0?'[retry '+attempt+']':'')+' adid:'+adid,'ok');
       if(txt&&txt.length>0){log('RESP: '+txt.substring(0,300),'resp');}
       addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
       addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
-
-      if (ok) {
-        // Success — log to KV
-        try {
-          var rd = JSON.parse(txt);
-          var impId = (rd.data && rd.data.proofs && rd.data.proofs[0]) ? rd.data.proofs[0].impression_id : '';
-          logToKV(adid, durationSec, completed, impId);
-        } catch(e2) { logToKV(adid, durationSec, completed, ''); }
-      } else {
-        // Non-2xx — log error to KV so dashboard shows it
-        logErrorToKV(adid, durationSec, completed, status, txt);
-        // Retry logic
-        if(attempt<3){
-          var delay=[0,2000,4000,8000][attempt+1]||8000;
-          log('Retrying in '+(delay/1000)+'s (attempt '+(attempt+1)+'/3)','warn');
-          setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);
-        }
-      }
+      if(ok){try{var rd=JSON.parse(txt);var impId=(rd.data&&rd.data.proofs&&rd.data.proofs[0])?rd.data.proofs[0].impression_id:'';logToKV(adid,durationSec,completed,impId);}catch(e2){logToKV(adid,durationSec,completed,'');}}
+      else{logErrorToKV(adid,durationSec,completed,status,txt);if(attempt<3){var delay=[0,2000,4000,8000][attempt+1]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}}
     });
   }).catch(function(e){
     log('Batch POST FAIL (attempt '+attempt+'): '+e.message,'err');
     addPostHistory({adid:adid,completed:completed,status:'fail',attempt:attempt,ts:ts,body:body,resp:e.message});
-    if(attempt<3){
-      var delay=[2000,4000,8000][attempt]||8000;
-      log('Retrying in '+(delay/1000)+'s (attempt '+(attempt+1)+'/3)','warn');
-      setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);
-    } else {
-      log('All retries exhausted — queuing for later: '+adid,'err');
-      offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:ts,retries:attempt});
-      updQueueBadge();
-    }
+    if(attempt<3){var delay=[2000,4000,8000][attempt]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}
+    else{log('All retries exhausted — queuing: '+adid,'err');offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:ts,retries:attempt});updQueueBadge();}
   });
 }
 
@@ -528,23 +518,15 @@ function addPostHistory(entry){postHistory.unshift(entry);if(postHistory.length>
 function rendPostHistory(){
   var e=document.getElementById('post-history');if(!e)return;
   if(!postHistory.length){e.innerHTML='<div style="color:#444;padding:4px">No POSTs yet</div>';return;}
-  e.innerHTML=postHistory.map(function(p,i){
-    var s=p.status;
-    var cls='ph-row '+(s==='queued'?'queued':s==='fail'||s>=400?'fail':p.attempt>0?'retry':'ok');
+  e.innerHTML=postHistory.map(function(p){
+    var s=p.status,cls='ph-row '+(s==='queued'?'queued':s==='fail'||s>=400?'fail':p.attempt>0?'retry':'ok');
     var statusStr=s==='queued'?'QUEUED':s==='fail'?'FAIL':'HTTP '+s;
-    var retryStr=p.attempt>0?' [retry '+p.attempt+']':'';
-    var compStr=p.completed?'COMPLETE':'START';
     return'<div class="'+cls+'" onclick="togPH(this)">'+
       '<span style="color:#333">'+p.ts.substring(11,19)+'</span> '+
-      '<span style="color:'+(s>=200&&s<300?'#0f0':s==='queued'?'#f80':'#f44')+'">'+statusStr+'</span>'+retryStr+' '+
-      '<span style="color:#888">'+compStr+'</span> '+
+      '<span style="color:'+(s>=200&&s<300?'#0f0':s==='queued'?'#f80':'#f44')+'">'+statusStr+'</span>'+(p.attempt>0?' [retry '+p.attempt+']':'')+' '+
+      '<span style="color:#888">'+(p.completed?'COMPLETE':'START')+'</span> '+
       '<span style="color:#555">'+String(p.adid).substring(0,12)+'</span>'+
-      '<div class="ph-detail">'+
-        '<div style="color:#f80;margin-bottom:4px">REQUEST BODY</div>'+
-        '<div style="color:#666">'+escHtml(p.body||'')+'</div>'+
-        (p.resp?'<div style="color:#f80;margin:4px 0 2px">RESPONSE</div><div style="color:#aaf">'+escHtml(String(p.resp).substring(0,500))+'</div>':'')+
-      '</div>'+
-    '</div>';
+      '<div class="ph-detail"><div style="color:#f80;margin-bottom:4px">REQUEST BODY</div><div style="color:#666">'+escHtml(p.body||'')+'</div>'+(p.resp?'<div style="color:#f80;margin:4px 0 2px">RESPONSE</div><div style="color:#aaf">'+escHtml(String(p.resp).substring(0,500))+'</div>':'')+'</div></div>';
   }).join('');
 }
 function togPH(row){var d=row.querySelector('.ph-detail');if(d)d.classList.toggle('open');}
@@ -625,8 +607,7 @@ function rendFillByHour(){
     var pct=h.reqs>0?Math.round((h.fills/h.reqs)*100):0;
     var heightPct=h.fills>0?Math.round((h.fills/maxFills)*100):2;
     var color=pct>60?'#0f0':pct>30?'#f80':'#f44';if(h.reqs===0)color='#1a1a1a';
-    var isCur=i===now;
-    return'<div class="fh-col" style="'+(isCur?'outline:1px solid #444;':'')+'" title="'+i+':00 — '+h.fills+' fills / '+h.reqs+' req ('+pct+'%)"><div class="fh-fill" style="height:'+heightPct+'%;background:'+color+'"></div></div>';
+    return'<div class="fh-col" style="'+(i===now?'outline:1px solid #444;':'')+'" title="'+i+':00 — '+h.fills+' fills / '+h.reqs+' req ('+pct+'%)"><div class="fh-fill" style="height:'+heightPct+'%;background:'+color+'"></div></div>';
   }).join('');
   var labels='<div style="display:flex;gap:2px;margin-top:2px">';
   for(var i=0;i<24;i++){labels+='<div class="fh-label" style="flex:1;min-width:6px;color:'+(i===now?'#fff':'#333')+'">'+(i%6===0?i:'')+'</div>';}
@@ -671,7 +652,7 @@ function refreshPP(){
   var doms=Object.keys(pixDest);
   if(!doms.length){dl.innerHTML='<div style="color:#444;padding:12px;text-align:center">No pixel traffic yet</div>';rendLF();return}
   dl.innerHTML=doms.map(function(domain){
-    var d=pixDest[domain];var pp=pparams(d.urls[0]||'');var collected=[];var su=d.urls[0]||'';
+    var d=pixDest[domain];var su=d.urls[0]||'';var collected=[];
     if(su.indexOf('ppid=')>=0||su.indexOf('screen_id=')>=0)collected.push({k:'Screen ID',v:'Identifies your screen'});
     if(su.indexOf('ifa=')>=0)collected.push({k:'Device ID (ifa)',v:'Hardware ID'});
     if(su.indexOf('city=')>=0)collected.push({k:'City / State',v:'Location'});
@@ -680,7 +661,7 @@ function refreshPP(){
     if(su.indexOf('uip=')>=0)collected.push({k:'IP Address',v:'Geo/fraud'});
     if(su.indexOf('venuetype=')>=0)collected.push({k:'Venue Type',v:'Transit/taxi'});
     if(su.indexOf('schain=')>=0)collected.push({k:'Supply Chain',v:'trillboards schain'});
-    if(pp.p['pzoneid'])collected.push({k:'Zone ID',v:'Vidverto zone: '+pp.p['pzoneid']});
+    var pp=pparams(su);if(pp.p['pzoneid'])collected.push({k:'Zone ID',v:'Vidverto zone: '+pp.p['pzoneid']});
     if(pp.p['iu'])collected.push({k:'Ad Unit',v:decodeURIComponent(pp.p['iu'])});
     var chHtml=collected.map(function(c){return'<div class="ddrow"><span class="ddk">'+c.k+'</span><span class="ddv">'+c.v+'</span></div>'}).join('');
     return'<div class="dcard" onclick="togDest(this)"><div style="display:flex;justify-content:space-between"><div><div class="dname">'+d.type+'</div><div class="ddomain">'+domain+'</div></div><div style="text-align:right;font-size:10px"><div class="'+(d.dead>0?'red':'green')+'">'+d.ok+' ok / '+d.dead+' dead</div><div style="color:#444">'+d.count+' hits</div></div></div><div class="dbadges">'+(d.test?'<span class="dbadge db-test">TEST</span>':'<span class="dbadge db-prod">PROD</span>')+(d.dead>0?'<span class="dbadge db-dead">'+d.dead+' DEAD</span>':'<span class="dbadge db-ok">HEALTHY</span>')+'</div><div class="ddetail">'+(collected.length?'<div class="dd-sec">Data Collected</div>'+chHtml:'')+(d.urls[0]?'<div class="dd-sec">Sample URL</div><div class="dd-url">'+d.urls[0].substring(0,250)+'</div>':'')+'</div></div>'
@@ -689,13 +670,29 @@ function refreshPP(){
 function togDest(card){var d=card.querySelector('.ddetail');if(d)d.classList.toggle('open')}
 function switchTab(t){document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
 
+// ── HEARTBEAT WITH UA DEVICE PARSING ─────────────────────────
+function parseDeviceInfo(){
+  var ua=navigator.userAgent;
+  var model='Unknown',osVersion='Android',make='Android';
+  var mOS=ua.match(/Android\s([\d.]+)/);
+  if(mOS)osVersion='Android '+mOS[1];
+  var mModel=ua.match(/\(Linux;\sAndroid[\d\s.]+;\s([^)]+?)\sBuild\//);
+  if(mModel)model=mModel[1].trim();
+  else{var mModel2=ua.match(/\(Linux;\sAndroid[\d\s.]+;\s([^)]+?)\)/);if(mModel2)model=mModel2[1].trim();}
+  var mMake=model.split(/[\s-]/)[0];
+  if(mMake&&mMake.length>1)make=mMake;
+  return{make:make,model:model,os_version:osVersion};
+}
+
 function sendHeartbeat(){
+  var dev=parseDeviceInfo();
   fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({device_id:DEVICE_ID,timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
-  }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}trackBytes('hb','hb',256);log('HB OK ('+r.status+')','ok');return r.json();
+    body:JSON.stringify({device_id:DEVICE_ID,timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0,make:'Samsung',model:dev.model,os_version:dev.os_version,device_category:'tablet',venue_type:'transit',screen_id:SCREEN_ID,device:{os:'Android',osv:'11',make:'Samsung',model:dev.model},sdk:{ima_supported:true,ima_integration:'html5_webview'}})
+  }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}trackBytes('hb','hb',256);log('HB OK ('+r.status+') ['+dev.model+']','ok');return r.json();
   }).then(function(data){
     if(data&&data.refresh_interval){var ms=Math.max(30000,data.refresh_interval*1000);if(ms!==HB_INTERVAL_MS){HB_INTERVAL_MS=ms;log('HB interval updated to '+(ms/1000)+'s from server','info');var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=Math.round(ms/1000)+'s';}}
-  }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});}
+  }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});
+}
 
 function logAdCpm(ad,sourceName,advertiser){
   var ts=new Date().toTimeString().substring(0,8);var dur=cachedDur||0,tp='',deal='',cpm=FLOOR_CPM,system='';
@@ -795,7 +792,6 @@ function loadSettingsUI(){
     var tb=document.getElementById('set-test-btn');if(tb){tb.textContent=TEST_MODE?'ON':'OFF';tb.style.color=TEST_MODE?'#0f0':'#aaa';}
     var br=document.getElementById('set-bright');if(br)br.value=BRIGHTNESS;
     var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=BRIGHTNESS;
-    // Remote config status
     var cfgStatus=document.getElementById('set-cfg-status');if(cfgStatus)cfgStatus.textContent=lastConfigTs?'OK':'POLLING...';
     var cfgTs=document.getElementById('set-cfg-ts');if(cfgTs)cfgTs.textContent=lastConfigTs||'never';
     var cfgPoll=document.getElementById('set-cfg-poll');if(cfgPoll)cfgPoll.textContent=Math.round(CONFIG_POLL_MS/1000)+'s';
@@ -838,34 +834,67 @@ setInterval(function(){
 
 function clearWatchdog(){clearTimeout(watchdogTimer);watchdogTimer=null;}
 function startWatchdog(ms){
-  ms=ms||WATERFALL_TIMEOUT;
-  clearWatchdog();
+  ms=ms||WATERFALL_TIMEOUT;clearWatchdog();
   watchdogTimer=setTimeout(function(){
     var s=sources[idx];
     log('WATCHDOG: '+(s?s.name:'?')+' timed out after '+ms/1000+'s — moving on','warn');
     if(s){srcStats[s.name].err++;S.err++;}
     playing=false;
     if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
-    rebuildLoader();
-    idx++;updStats();reqNext();
+    rebuildLoader();idx++;updStats();reqNext();
   },ms);
 }
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
 
-function fetchSources(background){
+// ── MODIFIED: fetchSources now picks up poll_interval_s, retry_on_error_s,
+//    and vast_urls[] from the /ads response. Error path uses RETRY_ON_ERROR_S.
+//    afterCycle=true means IMA is already inited — skip initIMA(), go to reqNext().
+function fetchSources(background, afterCycle){
   log((background?'Background':'Fetching')+' waterfall sources...','info');trackBytes('api','api',2048);
   if(!background)setNP('FETCHING...','Calling API');
-  fetch(API_URL,{headers:{'Authorization':'Bearer '+API_KEY}})
+  var adsParams='?slot_w='+window.innerWidth+'&slot_h='+window.innerHeight+'&orientation=landscape&muted=0&autoplay=1&ua='+encodeURIComponent(navigator.userAgent);
+  fetch(API_URL+adsParams,{headers:{'Authorization':'Bearer '+API_KEY}})
   .then(function(r){return r.json()})
   .then(function(data){
-    if(data.success&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
+    // NEW: pick up server-controlled timing fields
+    if(data.poll_interval_s){POLL_INTERVAL_S=data.poll_interval_s;updServerIntervalDisplay();}
+    if(data.retry_on_error_s){RETRY_ON_ERROR_S=data.retry_on_error_s;updServerIntervalDisplay();}
+
+    // NEW: support vast_urls[] array in addition to existing vast_waterfall structure
+    var gotSources=false;
+    if(data.vast_urls&&data.vast_urls.length){
+      sources=data.vast_urls.map(function(url,i){return{name:'source_'+(i+1),vast_url:url,priority:i+1,timeout_ms:WATERFALL_TIMEOUT};});
+      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
+      log('Got '+sources.length+' sources from vast_urls[]'+(background?' (background)':''),'ok');
+      gotSources=true;
+    } else if(data.success&&data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
       sources=data.data.header_bidding_settings.vast_waterfall.sources;
       sources.sort(function(a,b){return a.priority-b.priority});
       sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
-      log('Got '+sources.length+' sources'+(background?' (background)':''),'ok');rendSrc();
-      if(!background)initIMA();
-    }else{log('No sources — retry 30s','warn');if(!background){setNP('NO SOURCES','Retrying 30s');sched(30000);}}
-  }).catch(function(e){log('API error: '+e.message,'err');if(!background){setNP('API ERROR',e.message);sched(30000);}})}
+      log('Got '+sources.length+' sources from vast_waterfall'+(background?' (background)':''),'ok');
+      gotSources=true;
+    }
+
+    if(gotSources){
+      rendSrc();
+      if(afterCycle){
+        // IMA already inited — just reset index and go
+        idx=0;rebuildLoader();
+        setNP('WAITING','Next in '+POLL_INTERVAL_S+'s');
+        sched(POLL_INTERVAL_S*1000);
+      } else if(!background){
+        initIMA();
+      }
+    } else {
+      log('No sources — retry in '+RETRY_ON_ERROR_S+'s','warn');
+      if(!background){setNP('NO SOURCES','Retrying in '+RETRY_ON_ERROR_S+'s');sched(RETRY_ON_ERROR_S*1000);}
+    }
+  }).catch(function(e){
+    // NEW: use RETRY_ON_ERROR_S instead of hardcoded 30000
+    log('API error: '+e.message+' — retry in '+RETRY_ON_ERROR_S+'s','err');
+    if(!background&&!afterCycle){setNP('API ERROR',e.message);} 
+    sched(RETRY_ON_ERROR_S*1000);  // always re-arm, never die
+  })}
 
 function initIMA(){
   log('IMA ready','ok');
@@ -882,11 +911,11 @@ function rebuildLoader(){
   adsLoader=new google.ima.AdsLoader(adDisplayContainer);
   adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
   adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
-  log('Loader rebuilt','info');
-}
+  log('Loader rebuilt','info');}
 
 function reqNext(){
   clearTimeout(nextTimer);cdown=null;st('s-next','-');
+  correlator=Date.now();  // fresh correlator every request
   var hour=new Date().getHours();
   if(idx>=sources.length){
     fillHistory.push(0);fillByHour[hour].reqs++;
@@ -909,11 +938,13 @@ function reqNext(){
   req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,correlator)+sep+'correlator='+correlator+'&ppid='+SCREEN_ID+geoStr;
   req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
   req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
+  var cb=Date.now()+''+Math.floor(Math.random()*99999);  // unique cachebuster per request
+  req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,cb);
+  // Let IMA attempt all sources including VPAID — tracking pixels fire even on 901 errors
   try{adsLoader.requestAds(req);startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT);}catch(e){log('Threw: '+s.name+' '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
 
 function onLoaded(event){
-  var s=sources[idx];
-  log('Manager loaded: '+s.name,'ok');
+  var s=sources[idx];log('Manager loaded: '+s.name,'ok');
   if(adsManager){try{adsManager.destroy()}catch(e){}}
   adsManager=event.getAdsManager(vid);
   adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
@@ -944,6 +975,9 @@ function onLoaded(event){
     S.done++;updStats();resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
+    rs.mimeTypes=['video/mp4','video/webm','video/3gpp','application/javascript'];
+    rs.loadVideoTimeout=15000;
+    rs.enablePreloading=true;
     adsManager.updateAdsRenderingSettings(rs);
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
@@ -956,22 +990,26 @@ function onErr(event){
   var er=event.getError?event.getError().toString():'unknown';
   var erCode=event.getError&&event.getError().getErrorCode?event.getError().getErrorCode():0;
   var noFill=(erCode===303||erCode===1205||er.indexOf('empty')>=0||er.indexOf('no ad')>=0||er.indexOf('VAST_EMPTY')>=0);
-  var label=noFill?'NO FILL':'IMA ERROR';
-  log(label+' - '+(s?s.name:'?')+' ['+erCode+'] - '+er.substring(0,60),'err');
-  addEv('err',label+' - '+(s?s.name:'?')+(noFill?' (empty VAST)':' ('+erCode+')'),'');
+  log((noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+' ['+erCode+'] - '+er.substring(0,60),'err');
+  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+(noFill?' (empty VAST)':' ('+erCode+')'),'');
   if(s){srcStats[s.name].err++;S.err++}
   playing=false;
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
-  rebuildLoader();
-  idx++;updStats();setTimeout(reqNext,500)}
+  rebuildLoader();idx++;updStats();setTimeout(reqNext,500)}
 
-function onDone(){log('Cycle done - next in '+INTERVAL/1000+'s','info');playing=false;idx=0;
+// ── MODIFIED: onDone now re-fetches /ads after each cycle instead of blind sched()
+//    This picks up fresh vast_urls[], poll_interval_s, and retry_on_error_s every cycle.
+function onDone(){
+  clearWatchdog();  // prevent watchdog race
+  log('Cycle done — re-fetching /ads for next cycle','info');
+  playing=false;
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
-  rebuildLoader();
-  setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
+  updStats();
+  fetchSources(true, true);  // background=true (no initIMA), afterCycle=true (use poll_interval_s)
+}
 
 document.addEventListener('click',function(e){
   if(e.target.id==='btn-stats'||e.target.id==='btn-pixels')return;
@@ -986,6 +1024,137 @@ function startGPS(){
   function onErr(err){if(err.code===1){updateGpsStatus('PERMISSION DENIED','#f44');}else{updateGpsStatus('TIMEOUT - trying coarse','#ff0');tryCoarse();}}
   updateGpsStatus('ACQUIRING...','#ff0');
   navigator.geolocation.watchPosition(onFix,onErr,{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});}
+
+
+// ── IFRAME AD LOOP (Trillboards embed) ───────────────────────────────────────
+var EMBED_URL  = 'https://screen.trillboards.com?fp='+DEVICE_ID+'&ctv=1&autoplay=1';
+var adPlaying  = false;
+var adStartedThisCycle = false;  // true if ad_started fired this cycle
+var adWatchdog = null;
+
+function showAdFrame() {
+  if(adPlaying) return;
+  adPlaying = true;
+  log('Launching Trillboards native overlay', 'info');
+  setNP('LOADING AD...', 'via Trillboards');
+  addEv('start', 'AD OVERLAY LAUNCHED', '');
+  // Call native CurbBridge to open their player as a native WebView on top
+  if(typeof CurbBridge !== 'undefined') {
+    CurbBridge.showAd();
+  } else {
+    // Fallback to iframe if native bridge not available (browser testing)
+    log('CurbBridge not available — using iframe fallback', 'warn');
+    var frame = document.getElementById('ad-frame');
+    frame.src = EMBED_URL + '&t=' + Date.now();
+    frame.style.display = 'block';
+    document.getElementById('idle-screen').style.display = 'none';
+    adWatchdog = setTimeout(function(){
+      closeAdFrame('watchdog', 0, false);
+    }, 45000);
+  }
+}
+
+// Called by MainActivity when native overlay closes
+function onAdOverlayClosed(completed) {
+  log('Native overlay closed completed='+completed, 'ok');
+  // If ad started but completion event never fired, treat as completed
+  var wasCompleted = completed || adStartedThisCycle;
+  if(adStartedThisCycle && !completed) log('Ad started but no complete event — treating as completed', 'warn');
+  adStartedThisCycle = false;
+  closeAdFrame('trillboards', 30, wasCompleted);
+}
+
+function handleOverlayLog(msg) {
+  // Ad started playing
+  if(msg.indexOf('STARTED') >= 0 || msg.indexOf('AD_STARTED') >= 0 || msg.indexOf('ad_start') >= 0) {
+    clearTimeout(adWatchdog);
+    log('Overlay: ad started detected', 'ok');
+    addEv('start', 'AD PLAYING via overlay', '');
+    setNP('PLAYING', 'Trillboards');
+    S.fills++; updStats();
+    // Set a completion watchdog for max ad duration
+    adWatchdog = setTimeout(function(){
+      log('Ad completion watchdog — closing iframe', 'warn');
+      closeAdFrame('completed', 30, true);
+    }, 60000);
+  }
+  // Waterfall exhausted — no fill, close fast
+  if(msg.indexOf('waterfallExhausted":true') >= 0 || msg.indexOf('waterfall_exhausted') >= 0) {
+    log('Overlay: waterfall exhausted — no fill', 'warn');
+    addEv('err', 'NO FILL — waterfall exhausted', '');
+    S.err++; updStats();
+    clearTimeout(adWatchdog);
+    // Close iframe quickly and retry after interval
+    setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 500);
+  }
+  // Ad complete
+  if(msg.indexOf('COMPLETE') >= 0 && msg.indexOf('Overlay') >= 0) {
+    clearTimeout(adWatchdog);
+    log('Overlay: ad complete detected', 'ok');
+    closeAdFrame('completed', 30, true);
+  }
+  // Socket disconnect after waterfall — also signals end
+  if(msg.indexOf('Socket disconnected') >= 0 && adPlaying) {
+    log('Overlay: socket disconnect — checking state', 'info');
+  }
+}
+
+function closeAdFrame(source, durationSec, completed) {
+  if(!adPlaying) return;
+  clearTimeout(adWatchdog);
+  adPlaying = false;
+  var frame = document.getElementById('ad-frame');
+  frame.style.display = 'none';
+  frame.src = '';
+  document.getElementById('idle-screen').style.display = 'flex';
+  S.fills++; S.src = source; updStats();
+  setNP('IDLE', 'Next ad in '+Math.round(INTERVAL/1000)+'s');
+  addEv('done', 'AD ENDED — '+source+' '+durationSec+'s', '');
+  log('Ad ended — '+source+' '+durationSec+'s completed:'+completed, 'ok');
+  if(cachedDur===0) cachedDur = durationSec;
+  // Send impression
+  sendImpressionWithRetry(source, durationSec, completed, 0, false);  // KV post handled inside
+  // Schedule next iframe ad cycle
+  setTimeout(showAdFrame, INTERVAL);
+}
+
+// Handle bridge events from TrillboardsBridge (MainActivity.java) or postMessage
+window.addEventListener('message', function(e) {
+  try {
+    var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    if(!data || data.type !== 'trillboards') return;
+    handleBridgeEvent(data.event, data.data || {});
+  } catch(ex) {}
+});
+
+function handleBridgeEvent(type, data) {
+  log('Bridge: '+type, 'info');
+  switch(type) {
+    case 'programmatic_started':
+    case 'ad_started':
+      clearTimeout(adWatchdog);
+      var src = data.source || data.id || 'unknown';
+      log('AD STARTED — '+src, 'ok');
+      addEv('start', 'STARTED — '+src, '');
+      setNP('PLAYING', src);
+      S.src = src; updStats();
+      adStartedThisCycle = true;
+      break;
+    case 'programmatic_ended':
+    case 'ad_ended':
+      closeAdFrame(data.source||data.id||'unknown', data.duration||30, true);
+      break;
+    case 'programmatic_no_fill':
+      S.err++; updStats();
+      log('NO FILL — '+(data.source||'?'), 'warn');
+      addEv('err', 'NO FILL — '+(data.source||'?'), '');
+      break;
+    case 'programmatic_error':
+      S.err++; updStats();
+      log('ERROR — '+(data.error||'?'), 'err');
+      break;
+  }
+}
 
 window.addEventListener('load',function(){
   try{
@@ -1005,11 +1174,14 @@ window.addEventListener('load',function(){
     log('Settings loaded','info');
   }catch(e){log('Settings load error: '+e.message,'warn');}
   log('IMA: '+typeof google,'ok');
-  // Start all services
-  pollConfig();  // poll remote config on startup, then every CONFIG_POLL_MS
-  fetchSources();
+  updServerIntervalDisplay();
+  pollConfig();
+  // Start iframe-based ad loop
+  setTimeout(showAdFrame, 2000);
+  var _hbTimer=null;
+  function reschedHeartbeat(ms){clearInterval(_hbTimer);_hbTimer=setInterval(sendHeartbeat,ms||HB_INTERVAL_MS);}
   sendHeartbeat();
-  setInterval(sendHeartbeat,HB_INTERVAL_MS);
+  reschedHeartbeat();
   startGPS();
   setInterval(function(){log('Hourly source refresh...','info');fetchSources(true);},3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);

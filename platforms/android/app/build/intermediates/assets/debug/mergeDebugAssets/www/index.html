@@ -13,7 +13,9 @@
     #ad-display{position:absolute;top:0;left:0;width:100%;height:100%}
     #btn-stats{position:fixed;top:10px;right:10px;z-index:9999;background:rgba(0,255,100,.15);border:1px solid #0f0;color:#0f0;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
     #btn-pixels{position:fixed;top:10px;right:100px;z-index:9999;background:rgba(255,140,0,.15);border:1px solid #f80;color:#f80;padding:6px 14px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
-    #stats-panel{display:none;position:fixed;top:0;right:0;width:320px;height:100%;background:rgba(0,0,0,.96);border-left:1px solid #1a1a1a;z-index:9998;overflow-y:auto;padding:10px;font-size:11px;color:#ccc}
+    #btn-set{position:fixed;top:10px;right:190px;z-index:9999;background:rgba(100,100,255,.15);border:1px solid #88f;color:#88f;padding:6px 10px;font-size:14px;cursor:pointer;border-radius:4px}
+    #btn-data{position:fixed;top:10px;right:280px;z-index:9999;background:rgba(0,255,200,.1);border:1px solid #0fc;color:#0fc;padding:6px 10px;font-size:11px;cursor:pointer;border-radius:4px;letter-spacing:1px}
+    #stats-panel{display:none;position:fixed;top:0;right:0;width:340px;height:100%;background:rgba(0,0,0,.96);border-left:1px solid #1a1a1a;z-index:9998;overflow-y:auto;padding:10px;font-size:11px;color:#ccc}
     #stats-panel.open{display:block}
     #pixel-panel{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:10000;overflow-y:auto;padding:14px;font-size:11px;color:#ccc}
     #pixel-panel.open{display:block}
@@ -37,6 +39,7 @@
     .sname{color:#ddd;font-size:11px;font-weight:bold}.sstats{color:#555;font-size:9px;margin-top:1px}
     .badge{display:inline-block;padding:1px 4px;border-radius:2px;font-size:9px;margin-left:4px;font-weight:bold}
     .b-live{background:#0f0;color:#000}.b-try{background:#ff0;color:#000}.b-fill{background:#4af;color:#000}.b-err{background:#f44;color:#fff}
+    .b-queue{background:#f80;color:#000}.b-retry{background:#f0f;color:#000}
     .scrollbox{overflow-y:auto;background:#030303;border:1px solid #111;border-radius:3px;padding:4px}
     .evrow{padding:2px 3px;margin:1px 0;font-size:10px;border-left:2px solid #222;line-height:1.3}
     .evrow.imp{border-left-color:#0f0;color:#0b0}.evrow.start{border-left-color:#4af;color:#4af}
@@ -44,6 +47,7 @@
     .evrow.err{border-left-color:#f44;color:#f44}.evrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
     .logrow{font-size:10px;padding:1px 2px}
     .logrow.info{color:#4af}.logrow.ok{color:#0f0}.logrow.warn{color:#ff0}.logrow.err{color:#f44}.logrow.dim{color:#444}
+    .logrow.resp{color:#aaf;border-left:2px solid #44f;padding-left:4px;margin:1px 0;word-break:break-all}
     .ts{color:#333;margin-right:4px}
     .tabs{display:flex;margin-bottom:4px}
     .tab{flex:1;text-align:center;padding:4px;font-size:10px;cursor:pointer;border:1px solid #222;color:#555}
@@ -72,17 +76,128 @@
     .lfrow.q{border-left-color:#ff0;color:#990}.lfrow.done{border-left-color:#f80;color:#f80}
     .lfrow.err{border-left-color:#f44;color:#f44}.lfrow.dead{border-left-color:#f44;color:#f44;background:#0d0000}
     .lfdest{color:#333;font-size:9px;margin-top:1px;word-break:break-all}
+    .du-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #111}
+    .ph-row{padding:4px 6px;margin:2px 0;border-radius:3px;background:#080808;border-left:3px solid #222;font-size:10px;cursor:pointer}
+    .ph-row.ok{border-left-color:#0f0}.ph-row.fail{border-left-color:#f44}.ph-row.retry{border-left-color:#f0f}.ph-row.queued{border-left-color:#f80}
+    .ph-detail{display:none;background:#030303;border-radius:3px;padding:6px;margin-top:4px;font-size:9px;word-break:break-all;color:#888}
+    .ph-detail.open{display:block}
+    .fh-bar{display:flex;align-items:flex-end;gap:2px;height:40px;margin-top:4px}
+    .fh-col{flex:1;background:#1a1a1a;border-radius:2px 2px 0 0;position:relative;min-width:6px}
+    .fh-fill{background:#0f0;border-radius:2px 2px 0 0;width:100%;position:absolute;bottom:0}
+    .fh-label{color:#333;font-size:8px;text-align:center;margin-top:2px}
+    #offline-badge{display:none;position:fixed;top:50px;right:10px;z-index:9999;background:#f44;color:#fff;padding:4px 10px;font-size:10px;border-radius:4px;letter-spacing:1px}
+    #offline-badge.show{display:block}
+    #config-badge{position:fixed;top:50px;left:10px;z-index:9999;background:rgba(0,255,200,.1);border:1px solid #0fc;color:#0fc;padding:3px 8px;font-size:9px;border-radius:4px;letter-spacing:1px}
   </style>
 </head>
 <body>
-<div id="ad-container">
+<div id="idle-screen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;z-index:1"><div style="color:#222;font-size:32px;letter-spacing:8px;text-transform:uppercase">CURB</div></div>
+<!-- Trillboards embed iframe — shown fullscreen when ad plays -->
+<iframe id="ad-frame" src="" allow="autoplay; fullscreen; geolocation" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:20"></iframe>
+<div id="ad-container" style="position:fixed;top:0;left:0;width:100%;height:100%;display:none">
   <video id="content-video" playsinline muted></video>
   <div id="ad-display"></div>
   <div id="touch-blocker" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>
 </div>
-<button id="btn-stats" onclick="toggleStats()">STATS</button>
-<button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
 
+<div id="offline-badge">OFFLINE — QUEUING</div>
+<div id="config-badge">CFG: POLLING...</div>
+
+<!-- DATA PANEL -->
+<div id="data-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.97);z-index:10000;overflow-y:auto;padding:16px;font-family:monospace">
+  <div style="max-width:480px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #222;padding-bottom:12px">
+      <span style="color:#0fc;font-size:14px;font-weight:bold;letter-spacing:2px">DATA USAGE</span>
+      <span onclick="toggleData()" style="color:#555;font-size:22px;cursor:pointer;padding:0 8px">&#10005;</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div style="background:#080808;border:1px solid #1a1a1a;border-radius:6px;padding:12px;text-align:center"><div style="color:#555;font-size:9px;letter-spacing:1px;margin-bottom:4px">SESSION</div><div id="du-session" style="color:#0fc;font-size:22px;font-weight:bold">0 B</div><div id="du-session-req" style="color:#444;font-size:10px;margin-top:2px">0 requests</div></div>
+      <div style="background:#080808;border:1px solid #1a1a1a;border-radius:6px;padding:12px;text-align:center"><div style="color:#555;font-size:9px;letter-spacing:1px;margin-bottom:4px">EST. DAILY</div><div id="du-daily" style="color:#0fc;font-size:22px;font-weight:bold">0 B</div><div id="du-daily-sub" style="color:#444;font-size:10px;margin-top:2px">based on uptime</div></div>
+      <div style="background:#080808;border:1px solid #1a1a1a;border-radius:6px;padding:12px;text-align:center"><div style="color:#555;font-size:9px;letter-spacing:1px;margin-bottom:4px">EST. MONTHLY</div><div id="du-monthly" style="color:#0fc;font-size:22px;font-weight:bold">0 B</div><div id="du-monthly-sub" style="color:#444;font-size:10px;margin-top:2px">30 day projection</div></div>
+      <div style="background:#080808;border:1px solid #1a1a1a;border-radius:6px;padding:12px;text-align:center"><div style="color:#555;font-size:9px;letter-spacing:1px;margin-bottom:4px">9K FLEET/MO</div><div id="du-fleet" style="color:#f80;font-size:22px;font-weight:bold">0 B</div><div id="du-fleet-sub" style="color:#444;font-size:10px;margin-top:2px">projected total</div></div>
+    </div>
+    <div style="color:#0fc;font-size:10px;letter-spacing:2px;margin-bottom:8px">BREAKDOWN</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div class="du-row"><span style="color:#555">Ad Video (estimated)</span><span id="du-video" style="color:#fff">0 B</span></div>
+      <div class="du-row"><span style="color:#555">VAST XML Requests</span><span id="du-vast" style="color:#fff">0 B</span></div>
+      <div class="du-row"><span style="color:#555">Tracking Pixels</span><span id="du-pixels" style="color:#fff">0 B</span></div>
+      <div class="du-row"><span style="color:#555">Heartbeat POSTs</span><span id="du-hb" style="color:#fff">0 B</span></div>
+      <div class="du-row"><span style="color:#555">Impression POSTs</span><span id="du-imp" style="color:#fff">0 B</span></div>
+      <div class="du-row"><span style="color:#555">Waterfall API</span><span id="du-api" style="color:#fff">0 B</span></div>
+    </div>
+    <div style="color:#0fc;font-size:10px;letter-spacing:2px;margin-bottom:8px">PER AD AVERAGE</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div class="du-row"><span style="color:#555">Avg per ad play</span><span id="du-per-ad" style="color:#fff">0 B</span></div>
+      <div class="du-row"><span style="color:#555">Ads played</span><span id="du-ads-played" style="color:#fff">0</span></div>
+      <div class="du-row"><span style="color:#555">Avg ad duration</span><span id="du-avg-dur" style="color:#fff">0s</span></div>
+    </div>
+    <button onclick="resetDataUsage()" style="width:100%;background:#1a0000;border:1px solid #3a0000;color:#f44;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-bottom:8px">RESET DATA COUNTERS</button>
+    <button onclick="toggleData()" style="width:100%;background:#1a1a1a;border:1px solid #333;color:#555;padding:10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">CLOSE</button>
+  </div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div id="set-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.95);z-index:20000;overflow-y:auto;padding:16px;font-family:monospace">
+  <div style="max-width:480px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #222;padding-bottom:12px">
+      <span style="color:#88f;font-size:14px;font-weight:bold;letter-spacing:2px">&#9881; SETTINGS</span>
+      <span onclick="toggleSettings()" style="color:#555;font-size:22px;cursor:pointer;padding:0 8px">&#10005;</span>
+    </div>
+    <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">REMOTE CONFIG</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div><div style="color:#fff;font-size:12px">Config Source</div><div style="color:#444;font-size:10px">Settings pushed from dashboard override local</div></div>
+        <div id="set-cfg-status" style="color:#f80;font-size:10px">POLLING...</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #111"><span style="color:#555;font-size:10px">Last Fetched</span><span id="set-cfg-ts" style="color:#aaa;font-size:10px">never</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #111"><span style="color:#555;font-size:10px">Poll Interval</span><span id="set-cfg-poll" style="color:#aaa;font-size:10px">5 min</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#555;font-size:10px">KV Logging</span><span id="set-cfg-kv" style="color:#aaa;font-size:10px">enabled</span></div>
+      <button onclick="pollConfigNow()" style="width:100%;background:#001a1a;border:1px solid #003a3a;color:#0fc;padding:6px;border-radius:4px;cursor:pointer;font-size:10px;font-family:monospace;margin-top:8px">POLL NOW</button>
+    </div>
+    <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">REVENUE</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="margin-bottom:10px">
+        <div style="color:#555;font-size:10px;margin-bottom:4px">FLOOR CPM ($)</div>
+        <div style="display:flex;gap:8px"><input id="set-cpm" type="number" step="0.01" min="0.01" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('cpm')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div>
+        <div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-cpm-cur" style="color:#f80">$3.00</span></div>
+      </div>
+    </div>
+    <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">TIMING</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">AD INTERVAL (seconds)</div><div style="display:flex;gap:8px"><input id="set-interval" type="number" step="1" min="5" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('interval')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-interval-cur" style="color:#f80">30s</span></div></div>
+      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">HEARTBEAT INTERVAL (seconds)</div><div style="display:flex;gap:8px"><input id="set-hb" type="number" step="5" min="10" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('hb')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-hb-cur" style="color:#f80">30s</span></div></div>
+      <div><div style="color:#555;font-size:10px;margin-bottom:4px">WATERFALL TIMEOUT (seconds)</div><div style="display:flex;gap:8px"><input id="set-timeout" type="number" step="1" min="3" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('timeout')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-timeout-cur" style="color:#f80">8s</span></div></div>
+    </div>
+    <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">DEVICE IDENTITY</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">DEVICE ID (fingerprint)</div><div style="display:flex;gap:8px"><input id="set-did" type="text" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:11px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('did')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-did-cur" style="color:#f80;word-break:break-all">P_691cbdd4b3117cb1b692f4ae</span></div></div>
+      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">SCREEN ID</div><div style="display:flex;gap:8px"><input id="set-sid" type="text" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:11px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('sid')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-sid-cur" style="color:#f80;word-break:break-all">69a076ad2ccbba67a5ba1c1e</span></div></div>
+      <div><div style="color:#555;font-size:10px;margin-bottom:4px">PARTNER API KEY</div><div style="display:flex;gap:8px"><input id="set-key" type="password" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:11px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('key')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-key-cur" style="color:#f80">trb_partner_****</span></div></div>
+    </div>
+    <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">DISPLAY</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="color:#fff;font-size:12px">Hide UI Buttons</div><div style="color:#444;font-size:10px">5-tap top-left corner to restore</div></div><button id="set-hide-btn" onclick="toggleHideUI()" style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">OFF</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center"><div><div style="color:#fff;font-size:12px">Brightness</div><div style="color:#444;font-size:10px">Screen brightness (0-100)</div></div><div style="display:flex;gap:6px;align-items:center"><input id="set-bright" type="range" min="10" max="100" value="100" style="width:80px" oninput="setBrightness(this.value)"/><span id="set-bright-val" style="color:#f80;font-size:11px;width:30px">100</span></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><div><div style="color:#fff;font-size:12px">Font Size</div><div style="color:#444;font-size:10px">UI text size (8-18px)</div></div><div style="display:flex;gap:6px;align-items:center"><input id="set-font" type="range" min="8" max="18" value="11" style="width:80px" oninput="setFontSize(this.value)"/><span id="set-font-val" style="color:#f80;font-size:11px;width:30px">11</span></div></div>
+    </div>
+    <div style="color:#f80;font-size:10px;letter-spacing:2px;margin-bottom:8px">DEBUG</div>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-bottom:14px">
+      <div style="margin-bottom:10px"><div style="color:#555;font-size:10px;margin-bottom:4px">FORCE WATERFALL SOURCE (0 = auto)</div><div style="display:flex;gap:8px"><input id="set-force" type="number" step="1" min="0" style="flex:1;background:#000;border:1px solid #333;color:#fff;padding:8px;font-size:16px;border-radius:4px;font-family:monospace"/><button onclick="saveSetting('force')" style="background:#88f;border:none;color:#000;padding:8px 16px;font-weight:bold;border-radius:4px;cursor:pointer">SAVE</button></div><div style="color:#444;font-size:10px;margin-top:4px">Current: <span id="set-force-cur" style="color:#f80">auto</span></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="color:#fff;font-size:12px">Test Mode</div><div style="color:#444;font-size:10px">Logs extra debug info</div></div><button id="set-test-btn" onclick="toggleTestMode()" style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">OFF</button></div>
+      <button onclick="clearStats()" style="width:100%;background:#1a0000;border:1px solid #3a0000;color:#f44;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-bottom:8px">CLEAR SESSION STATS</button>
+      <button onclick="reloadSources()" style="width:100%;background:#001a00;border:1px solid #003a00;color:#0f0;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">RELOAD WATERFALL SOURCES</button>
+    </div>
+    <div id="set-saved" style="display:none;text-align:center;color:#0f0;font-size:12px;padding:8px;background:#001500;border-radius:4px;margin-bottom:12px">Settings saved!</div>
+    <button onclick="toggleSettings()" style="width:100%;background:#1a1a1a;border:1px solid #333;color:#555;padding:10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">CLOSE</button>
+  </div>
+</div>
+
+<button id="btn-stats" onclick="toggleStats()">STATS</button>
+<button id="btn-set" onclick="toggleSettings()">&#9881;</button>
+<button id="btn-pixels" onclick="togglePixels()">PIXELS</button>
+<button id="btn-data" onclick="toggleData()">DATA</button>
+
+<!-- STATS PANEL -->
 <div id="stats-panel">
   <div class="ptitle">CURB AD MONITOR</div>
   <div class="uptime" id="uptime">UP: 00:00:00</div>
@@ -92,68 +207,330 @@
     <div class="sr"><span class="sl">Fills</span><span class="sv green" id="s-fills">0</span></div>
     <div class="sr"><span class="sl">Errors / No Fill</span><span class="sv red" id="s-err">0</span></div>
     <div class="sr"><span class="sl">Fill Rate</span><span class="sv" id="s-rate">0%</span></div>
+    <div class="sr"><span class="sl">Avg Fill Rate</span><span class="sv" id="s-avg-rate">0%</span></div>
     <div class="sr"><span class="sl">Ads Completed</span><span class="sv blue" id="s-done">0</span></div>
     <div class="sr"><span class="sl">Impressions Fired</span><span class="sv green" id="s-imp">0</span></div>
+    <div class="sr"><span class="sl">Offline Queued</span><span class="sv orange" id="s-queued">0</span></div>
     <div class="sr"><span class="sl">Pixels Dead</span><span class="sv" id="s-dead">0</span></div>
     <div class="sr"><span class="sl">Last Fill Source</span><span class="sv blue" id="s-src">-</span></div>
     <div class="sr"><span class="sl">Last Advertiser</span><span class="sv" id="s-adv">-</span></div>
     <div class="sr"><span class="sl">Floor CPM</span><span class="sv orange" id="s-floor">$3.00</span></div>
+    <div class="sr"><span class="sl">Avg CPM (est.)</span><span class="sv orange" id="s-avg-cpm">$0.00</span></div>
     <div class="sr"><span class="sl">Est. Rev (Session)</span><span class="sv green" id="s-rev">$0.0000</span></div>
     <div class="sr"><span class="sl">Est. Rev (Today)</span><span class="sv green" id="s-rev-day">$0.00</span></div>
     <div class="sr"><span class="sl">Heartbeat</span><span class="sv" id="s-hb">-</span></div>
     <div class="sr"><span class="sl">HB Failures</span><span class="sv" id="s-hb-fail">0</span></div>
     <div class="sr"><span class="sl">Next Request In</span><span class="sv" id="s-next">-</span></div>
+    <div class="sr"><span class="sl">Remote Config</span><span class="sv" id="s-cfg" style="color:#0fc">POLLING...</span></div>
+    <div class="sr"><span class="sl">GPS</span><span class="sv" id="s-gps" style="color:#ff0">WAITING...</span></div>
+    <!-- NEW: server-controlled timing visible in stats -->
+    <div class="sr"><span class="sl">Poll Interval (server)</span><span class="sv" id="s-poll-interval">60s</span></div>
+    <div class="sr"><span class="sl">Retry On Error (server)</span><span class="sv" id="s-retry-interval">30s</span></div>
   </div>
+  <div class="sec"><div class="sec-t">Fill Rate by Hour</div><div id="fh-chart"></div></div>
+  <div class="sec"><div class="sec-t">Ad CPM Log</div><div id="cpm-log" class="scrollbox" style="max-height:100px"><div style="color:#444;padding:4px">No ads played yet</div></div></div>
+  <div class="sec"><div class="sec-t">POST History <span id="ph-queue-badge" style="display:none" class="badge b-queue">QUEUED</span></div><div id="post-history" class="scrollbox" style="max-height:180px"><div style="color:#444;padding:4px">No POSTs yet</div></div></div>
   <div class="sec"><div class="sec-t">Waterfall Sources</div><div id="source-list"></div></div>
   <div class="sec"><div class="sec-t">Events</div>
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('ev')">EVENTS</div>
-      <div class="tab" onclick="switchTab('lg')">LOG</div>
-    </div>
+    <div class="tabs"><div class="tab active" onclick="switchTab('ev')">EVENTS</div><div class="tab" onclick="switchTab('lg')">LOG</div></div>
     <div id="tab-ev" class="scrollbox" style="max-height:200px"></div>
     <div id="tab-lg" class="scrollbox" style="max-height:200px;display:none"></div>
   </div>
 </div>
 
+<!-- PIXEL PANEL -->
 <div id="pixel-panel">
-  <div class="pxtitle">
-    <span>TRACKING PIXEL MONITOR</span>
-    <span class="pxclose" onclick="togglePixels()">&#10005;</span>
-  </div>
+  <div class="pxtitle"><span>TRACKING PIXEL MONITOR</span><span class="pxclose" onclick="togglePixels()">&#10005;</span></div>
   <div class="pp-grid">
     <div class="pp-card"><div class="pp-card-t">Pixels Fired</div><div class="pp-card-v green" id="pp-fired">0</div></div>
     <div class="pp-card"><div class="pp-card-t">Dead Pixels</div><div class="pp-card-v" id="pp-dead">0</div></div>
     <div class="pp-card"><div class="pp-card-t">Destinations</div><div class="pp-card-v orange" id="pp-dests">0</div></div>
     <div class="pp-card"><div class="pp-card-t">Billing</div><div class="pp-card-v" id="pp-billing">?</div></div>
   </div>
-  <div class="pp-sec">
-    <div class="pp-sec-t">Ad Metadata — from IMA SDK</div>
-    <div id="pp-meta-list"><div style="color:#444;padding:8px">Wait for an ad to start playing</div></div>
-  </div>
-  <div class="pp-sec">
-    <div class="pp-sec-t">Pixel Destinations — tap each to see what data is collected and where it goes</div>
-    <div id="pp-dest-list"><div style="color:#444;padding:12px;text-align:center">No pixel traffic yet — wait for an ad to play</div></div>
-  </div>
-  <div class="pp-sec">
-    <div class="pp-sec-t">Live Pixel Feed</div>
-    <div class="lf" id="pp-lf"><div style="color:#444;padding:8px">Waiting for pixel events...</div></div>
-  </div>
+  <div class="pp-sec"><div class="pp-sec-t">Ad Metadata — from IMA SDK</div><div id="pp-meta-list"><div style="color:#444;padding:8px">Wait for an ad to start playing</div></div></div>
+  <div class="pp-sec"><div class="pp-sec-t">Pixel Destinations</div><div id="pp-dest-list"><div style="color:#444;padding:12px;text-align:center">No pixel traffic yet</div></div></div>
+  <div class="pp-sec"><div class="pp-sec-t">Live Pixel Feed</div><div class="lf" id="pp-lf"><div style="color:#444;padding:8px">Waiting...</div></div></div>
 </div>
-
 <script>
 var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
 var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
-var INTERVAL=10000;
+var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
+var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
+var CONFIG_URL='https://trillboards-proxy.johnm-af2.workers.dev/get-config';
+var KV_SECRET='curb2026';
+var INTERVAL=30000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=8000,FORCED_SOURCE=0;
+var MAX_PER_MIN=2;
+var lastCycleMinute=-1,cyclesThisMinute=0;
+var correlator=Date.now();
+var lastImpTime=0;
+var gpsLat=0,gpsLng=0,gpsAge=0,GPS_MAX_AGE_MS=5*60*1000;
+var UI_HIDDEN=false,TEST_MODE=false,BRIGHTNESS=100,FONT_SIZE=11;
 var sources=[],idx=0,adDisplayContainer,adsLoader,adsManager;
 var vid=document.getElementById('content-video');
 var adDiv=document.getElementById('ad-display');
-var playing=false,t0=Date.now(),adT0=null,nextTimer=null,cdown=null;
+var playing=false,t0=Date.now(),adT0=null,nextTimer=null,cdown=null,watchdogTimer=null;
 var S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};
 var FLOOR_CPM=3.00;
-var srcStats={},pixEv=[],pixDest={},logs=[],vastPixels=[],adMeta=[],adMetaTs='',S_hbOk=0,S_hbFail=0;
+var DU={bytes:0,reqs:0,video:0,vast:0,pixels:0,hb:0,imp:0,api:0,adDurs:[],t0:Date.now()};
+var srcStats={},pixEv=[],pixDest={},logs=[],vastPixels=[],adMeta=[],adMetaTs='';
+var S_hbOk=0,S_hbFail=0;
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
+var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
+var cpmLog=[],fillHistory=[],postHistory=[];
+var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
+
+// ── NEW: server-controlled poll/retry intervals (overridden by /ads response) ──
+var POLL_INTERVAL_S = 60;   // default, overridden by data.poll_interval_s
+var RETRY_ON_ERROR_S = 30;  // default, overridden by data.retry_on_error_s
+
+function updServerIntervalDisplay() {
+  var sp = document.getElementById('s-poll-interval');
+  var sr = document.getElementById('s-retry-interval');
+  if (sp) sp.textContent = POLL_INTERVAL_S + 's';
+  if (sr) sr.textContent = RETRY_ON_ERROR_S + 's';
+}
+
+// ── Remote Config System ──────────────────────────────────────
+var REMOTE_CONFIG = {};
+var CONFIG_POLL_MS = 300000;
+var configPollTimer = null;
+var lastConfigTs = null;
+
+function applyRemoteConfig(cfg) {
+  if (!cfg) return;
+  REMOTE_CONFIG = cfg;
+  if (cfg.floor_cpm != null && !isNaN(cfg.floor_cpm)) {
+    FLOOR_CPM = parseFloat(cfg.floor_cpm);
+    var sf = document.getElementById('s-floor'); if (sf) sf.textContent = '$' + FLOOR_CPM.toFixed(2);
+    var cc = document.getElementById('set-cpm-cur'); if (cc) cc.textContent = '$' + FLOOR_CPM.toFixed(2);
+  }
+  if (cfg.interval != null && cfg.interval >= 5) {
+    INTERVAL = parseInt(cfg.interval) * 1000;
+    var ic = document.getElementById('set-interval-cur'); if (ic) ic.textContent = cfg.interval + 's';
+  }
+  if (cfg.hb_interval != null && cfg.hb_interval >= 10) {
+    HB_INTERVAL_MS = parseInt(cfg.hb_interval) * 1000;
+    var hc = document.getElementById('set-hb-cur'); if (hc) hc.textContent = cfg.hb_interval + 's';
+  }
+  if (cfg.waterfall_timeout != null && cfg.waterfall_timeout >= 3) {
+    WATERFALL_TIMEOUT = parseInt(cfg.waterfall_timeout) * 1000;
+    var tc = document.getElementById('set-timeout-cur'); if (tc) tc.textContent = cfg.waterfall_timeout + 's';
+  }
+  if (cfg.force_source != null) {
+    FORCED_SOURCE = parseInt(cfg.force_source) || 0;
+    var fc = document.getElementById('set-force-cur'); if (fc) fc.textContent = FORCED_SOURCE ? 'Source ' + FORCED_SOURCE : 'auto';
+  }
+  if (cfg.test_mode != null) {
+    TEST_MODE = !!cfg.test_mode;
+    var tb = document.getElementById('set-test-btn');
+    if (tb) { tb.textContent = TEST_MODE ? 'ON' : 'OFF'; tb.style.color = TEST_MODE ? '#0f0' : '#aaa'; }
+  }
+  if (cfg.config_poll_interval != null && cfg.config_poll_interval >= 30) {
+    CONFIG_POLL_MS = parseInt(cfg.config_poll_interval) * 1000;
+  }
+  lastConfigTs = new Date().toTimeString().substring(0, 8);
+  var badge = document.getElementById('config-badge');
+  if (badge) badge.textContent = 'CFG: OK ' + lastConfigTs;
+  var cfgStatus = document.getElementById('set-cfg-status'); if (cfgStatus) cfgStatus.textContent = 'OK';
+  var cfgTs = document.getElementById('set-cfg-ts'); if (cfgTs) cfgTs.textContent = lastConfigTs;
+  var cfgPoll = document.getElementById('set-cfg-poll'); if (cfgPoll) cfgPoll.textContent = Math.round(CONFIG_POLL_MS / 1000) + 's';
+  var cfgKv = document.getElementById('set-cfg-kv'); if (cfgKv) cfgKv.textContent = cfg.kv_enabled === false ? 'disabled' : 'enabled';
+  var sCfg = document.getElementById('s-cfg');
+  if (sCfg) { sCfg.textContent = 'OK ' + lastConfigTs; sCfg.style.color = '#0f0'; }
+  log('Remote config applied — kv:' + (cfg.kv_enabled !== false) + ' cpm:' + cfg.floor_cpm + ' interval:' + cfg.interval, 'ok');
+}
+
+function pollConfig() {
+  clearTimeout(configPollTimer);
+  fetch(CONFIG_URL + '?_=' + Date.now(), { headers: { 'X-Proxy-Secret': KV_SECRET } })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.success && data.config) { applyRemoteConfig(data.config); }
+    else { log('Config poll: no config yet — using defaults', 'warn'); }
+    configPollTimer = setTimeout(pollConfig, CONFIG_POLL_MS);
+  })
+  .catch(function(e) {
+    log('Config poll failed: ' + e.message, 'warn');
+    var badge = document.getElementById('config-badge'); if (badge) badge.textContent = 'CFG: FAIL';
+    var sCfg = document.getElementById('s-cfg'); if (sCfg) { sCfg.textContent = 'FAIL'; sCfg.style.color = '#f44'; }
+    configPollTimer = setTimeout(pollConfig, CONFIG_POLL_MS);
+  });
+}
+
+function pollConfigNow() { log('Manual config poll...', 'info'); clearTimeout(configPollTimer); pollConfig(); }
+
+// ── Offline queue ─────────────────────────────────────────────
+var offlineQueue=[];
+var isOnline=navigator.onLine!==false;
+window.addEventListener('online',function(){
+  isOnline=true;
+  document.getElementById('offline-badge').classList.remove('show');
+  log('Network back online — flushing '+offlineQueue.length+' queued','ok');
+  flushQueue();
+});
+window.addEventListener('offline',function(){
+  isOnline=false;
+  document.getElementById('offline-badge').classList.add('show');
+  log('Network offline — impressions will queue','warn');
+});
+
+// ── KV Dual-Post ─────────────────────────────────────────────
+// ── KV Logger — local persistent totals + immediate flush ──
+// localStorage totals survive restarts — 100% accurate day count
+var kvCount = 0;      // session count (resets on restart)
+var kvCompleted = 0;  // session completed (resets on restart)
+
+function getTodayKey() {
+  return 'kv_'+new Date().toISOString().slice(0,10); // e.g. kv_2026-03-26
+}
+
+function loadTodayTotals() {
+  try {
+    var key = getTodayKey();
+    var stored = JSON.parse(localStorage.getItem(key) || '{"count":0,"completed":0}');
+    return stored;
+  } catch(e) { return {count:0, completed:0}; }
+}
+
+function saveTodayTotals(count, completed) {
+  try {
+    var key = getTodayKey();
+    localStorage.setItem(key, JSON.stringify({count:count, completed:completed}));
+    // Clean up yesterday's key
+    var yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
+    localStorage.removeItem('kv_'+yesterday);
+  } catch(e) {}
+}
+
+function logToKV(adid, durationSec, completed, impressionId) {
+  if (REMOTE_CONFIG.kv_enabled === false) return;
+  kvCount++;
+  if(completed) kvCompleted++;
+  // Update persistent daily totals
+  var totals = loadTodayTotals();
+  totals.count++;
+  if(completed) totals.completed++;
+  saveTodayTotals(totals.count, totals.completed);
+  log('KV today total: '+totals.count+' ('+totals.completed+' completed) | session: '+kvCount, 'info');
+  flushKVBuffer(totals);
+}
+
+function flushKVBuffer(totals) {
+  totals = totals || loadTodayTotals();
+  if(totals.count === 0) return;
+  fetch(KV_URL, {
+    method: 'POST',
+    headers: {'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      type: 'impression_count',
+      screen_id: SCREEN_ID,
+      device_id: DEVICE_ID,
+      count: totals.count,
+      completed: totals.completed,
+      timestamp: new Date().toISOString()
+    })
+  }).then(function(r){
+    log('KV flush OK ('+r.status+') today total: '+totals.count+' ('+totals.completed+' completed)', 'ok');
+    var ts = new Date().toTimeString().substring(0,8);
+    postHistory.unshift({type:'kv-flush', source:'total:'+totals.count, status:r.status, ts:ts});
+    if(postHistory.length > 20) postHistory.pop();
+    rendPostHistory();
+  }).catch(function(e){
+    log('KV flush FAIL: '+e.message+' — will retry next impression', 'err');
+  });
+}
+
+function logErrorToKV(adid, durationSec, completed, status, body) {
+  if (REMOTE_CONFIG.error_logging === false) return;
+  fetch(KV_URL, {
+    method: 'POST',
+    headers: { 'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'error', ad_id: adid || 'unknown', screen_id: SCREEN_ID, device_id: DEVICE_ID, duration_ms: (durationSec || 0) * 1000, completed: !!completed, impression_id: '', error_status: status, error_body: String(body || '').substring(0, 200) })
+  }).catch(function(){});
+}
+
+function flushQueue(){
+  if(!isOnline||offlineQueue.length===0)return;
+  var item=offlineQueue.shift();updQueueBadge();
+  log('Flushing queued impression: '+item.adid,'info');
+  sendImpressionWithRetry(item.adid,item.durationSec,item.completed,0,true);
+  if(offlineQueue.length>0)setTimeout(flushQueue,500);
+}
+
+function updQueueBadge(){
+  var b=document.getElementById('ph-queue-badge'),q=document.getElementById('s-queued');
+  if(b){b.style.display=offlineQueue.length>0?'inline-block':'none';b.textContent=offlineQueue.length+' QUEUED';}
+  if(q)q.textContent=offlineQueue.length;
+}
+
+var cachedAdId='',cachedAid='',cachedDur=0;
+function cacheAdInfo(ad){
+  if(!ad)return;
+  try{cachedAdId=(ad.getAdId&&ad.getAdId())||'';}catch(e){}
+  try{cachedAid=(ad.getDealId&&ad.getDealId())||'';}catch(e){}
+  try{cachedDur=ad.getDuration?Math.round(ad.getDuration()):0;}catch(e){}
+}
+function resolveAdAndSend(completed,maxTries){
+  maxTries=maxTries||10;
+  if(cachedAdId&&cachedAdId!=='unknown'){sendImpressionWithRetry(cachedAdId,cachedDur||0,completed,0,false);return;}
+  function attempt(tries){
+    var ad=null;try{ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;}catch(e){}
+    if(ad)cacheAdInfo(ad);
+    var adid=cachedAdId||'unknown';
+    if(adid==='unknown'&&tries<maxTries){setTimeout(function(){attempt(tries+1);},100);return;}
+    if(tries>0)log('resolveAd resolved after '+tries+' retries: '+adid,'ok');
+    else if(adid==='unknown')log('resolveAd: could not resolve after '+maxTries+' tries','warn');
+    sendImpressionWithRetry(adid,cachedDur||0,completed,0,false);
+  }
+  attempt(0);
+}
+
+function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
+  if(!isOnline){
+    offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:new Date().toISOString(),retries:attempt});
+    updQueueBadge();log('Offline — queued impression: '+adid+' (queue size: '+offlineQueue.length+')','warn');
+    addPostHistory({adid:adid,completed:completed,status:'queued',attempt:attempt,ts:new Date().toISOString(),body:'',resp:''});return;
+  }
+  var body=JSON.stringify({impressions:[{screen_id:SCREEN_ID,device_id:DEVICE_ID,ad_id:adid||'unknown',timestamp:new Date().toISOString(),duration_ms:(durationSec||0)*1000,completed:!!completed}]});
+  var ts=new Date().toISOString();
+  fetch(BATCH_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},body:body})
+  .then(function(r){
+    var status=r.status;return r.text().then(function(txt){
+      trackBytes('imp','imp',512);var ok=status>=200&&status<300;
+      log((ok?'Batch POST OK':'Batch POST ERR')+' ('+status+') '+(attempt>0?'[retry '+attempt+']':'')+' adid:'+adid,'ok');
+      if(txt&&txt.length>0){log('RESP: '+txt.substring(0,300),'resp');}
+      addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
+      addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
+      if(ok){try{var rd=JSON.parse(txt);var impId=(rd.data&&rd.data.proofs&&rd.data.proofs[0])?rd.data.proofs[0].impression_id:'';logToKV(adid,durationSec,completed,impId);}catch(e2){logToKV(adid,durationSec,completed,'');}}
+      else{logErrorToKV(adid,durationSec,completed,status,txt);if(attempt<3){var delay=[0,2000,4000,8000][attempt+1]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}}
+    });
+  }).catch(function(e){
+    log('Batch POST FAIL (attempt '+attempt+'): '+e.message,'err');
+    addPostHistory({adid:adid,completed:completed,status:'fail',attempt:attempt,ts:ts,body:body,resp:e.message});
+    if(attempt<3){var delay=[2000,4000,8000][attempt]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}
+    else{log('All retries exhausted — queuing: '+adid,'err');offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:ts,retries:attempt});updQueueBadge();}
+  });
+}
+
+function addPostHistory(entry){postHistory.unshift(entry);if(postHistory.length>20)postHistory.pop();rendPostHistory();}
+function rendPostHistory(){
+  var e=document.getElementById('post-history');if(!e)return;
+  if(!postHistory.length){e.innerHTML='<div style="color:#444;padding:4px">No POSTs yet</div>';return;}
+  e.innerHTML=postHistory.map(function(p){
+    var s=p.status,cls='ph-row '+(s==='queued'?'queued':s==='fail'||s>=400?'fail':p.attempt>0?'retry':'ok');
+    var statusStr=s==='queued'?'QUEUED':s==='fail'?'FAIL':'HTTP '+s;
+    return'<div class="'+cls+'" onclick="togPH(this)">'+
+      '<span style="color:#333">'+p.ts.substring(11,19)+'</span> '+
+      '<span style="color:'+(s>=200&&s<300?'#0f0':s==='queued'?'#f80':'#f44')+'">'+statusStr+'</span>'+(p.attempt>0?' [retry '+p.attempt+']':'')+' '+
+      '<span style="color:#888">'+(p.completed?'COMPLETE':'START')+'</span> '+
+      '<span style="color:#555">'+String(p.adid).substring(0,12)+'</span>'+
+      '<div class="ph-detail"><div style="color:#f80;margin-bottom:4px">REQUEST BODY</div><div style="color:#666">'+escHtml(p.body||'')+'</div>'+(p.resp?'<div style="color:#f80;margin:4px 0 2px">RESPONSE</div><div style="color:#aaf">'+escHtml(String(p.resp).substring(0,500))+'</div>':'')+'</div></div>';
+  }).join('');
+}
+function togPH(row){var d=row.querySelector('.ph-detail');if(d)d.classList.toggle('open');}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 var oOpen=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,url){this._u=url;return oOpen.apply(this,arguments)};
@@ -172,7 +549,7 @@ window.fetch=function(input,opts){
   return p};
 
 function skip(u){if(!u||typeof u!=='string')return true;
-  return u.indexOf('trillboards.com/v1')>=0||u.indexOf('imasdk.googleapis')>=0||u.indexOf('localhost')>=0}
+  return u.indexOf('trillboards.com/v1')>=0||u.indexOf('imasdk.googleapis')>=0||u.indexOf('localhost')>=0||u.indexOf('workers.dev')>=0}
 function isPix(u){return u.indexOf('pixel')>=0||u.indexOf('doubleclick')>=0||u.indexOf('vidverto')>=0||u.indexOf('adipolo')>=0||u.indexOf('aioo')>=0||u.indexOf('voisetech')>=0||u.indexOf('googleads')>=0}
 function dom(u){try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return u.substring(0,40)}}
 function ptype(u){
@@ -186,7 +563,9 @@ function ptype(u){
   return dom(u)}
 function pparams(u){try{var o=new URL(u),p={};o.searchParams.forEach(function(v,k){p[k]=v});return{d:o.hostname,path:o.pathname,p:p}}catch(e){return{d:'',path:'',p:{}}}}
 
-function onReq(u){if(skip(u)||!isPix(u))return;
+function onReq(u){
+  if(!skip(u)&&isPix(u))trackBytes(u,'pixel',150);
+  if(skip(u)||!isPix(u))return;
   var d=dom(u);
   if(!pixDest[d])pixDest[d]={type:ptype(u),count:0,ok:0,dead:0,last:'',urls:[],test:u.indexOf('/test/')>=0};
   var dest=pixDest[d];dest.count++;dest.last=new Date().toTimeString().substring(0,8);
@@ -197,17 +576,8 @@ function onRes(u,status){if(skip(u)||!isPix(u))return;
   if(pixDest[d]){if(ok)pixDest[d].ok++;else pixDest[d].dead++}
   if(!ok){S.dead++;addEv('dead','PIXEL DEAD: '+d+' ['+status+']',u);updStats()}}
 
-function addEv(type,msg,url){
-  var ts=new Date().toTimeString().substring(0,8);
-  pixEv.unshift({type:type,msg:msg,url:url,ts:ts});
-  if(pixEv.length>80)pixEv.pop();
-  rendEv();rendLF()}
-
-function log(msg,type){type=type||'dim';
-  var ts=new Date().toTimeString().substring(0,8);
-  logs.unshift({msg:msg,type:type,ts:ts});if(logs.length>100)logs.pop();
-  rendLog();console.log('[Curb] '+msg)}
-
+function addEv(type,msg,url){var ts=new Date().toTimeString().substring(0,8);pixEv.unshift({type:type,msg:msg,url:url,ts:ts});if(pixEv.length>80)pixEv.pop();rendEv();rendLF()}
+function log(msg,type){type=type||'dim';var ts=new Date().toTimeString().substring(0,8);logs.unshift({msg:msg,type:type,ts:ts});if(logs.length>150)logs.pop();rendLog();console.log('[Curb] '+msg)}
 function st(id,v){var e=document.getElementById(id);if(e)e.textContent=v}
 function setNP(s,d){st('nps',s);st('npd',d)}
 
@@ -215,224 +585,243 @@ function updStats(){
   var r=S.req>0?Math.round((S.fills/S.req)*100):0;
   st('s-req',S.req);st('s-fills',S.fills);st('s-err',S.err);st('s-done',S.done);
   st('s-imp',S.imp);st('s-dead',S.dead);st('s-src',S.src);st('s-adv',S.adv);
-  var rev=(S.imp||0)*(FLOOR_CPM/1000);
-  st('s-rev','$'+rev.toFixed(4));
-  var hrs=(Date.now()-t0)/3600000;
-  var dayEst=hrs>0?(rev/hrs)*24:0;
-  st('s-rev-day','$'+dayEst.toFixed(2));
-  var re=document.getElementById('s-rate');
-  if(re){re.textContent=r+'%';re.className='sv '+(r>60?'green':r>30?'yellow':'red')}
-  var de=document.getElementById('s-dead');
-  if(de)de.className='sv '+(S.dead>0?'red':'green');
-  rendSrc()}
+  updQueueBadge();
+  var recent=fillHistory.slice(-20);
+  var avgFill=recent.length>0?Math.round((recent.reduce(function(a,b){return a+b;},0)/recent.length)*100):0;
+  var avgFillEl=document.getElementById('s-avg-rate');
+  if(avgFillEl){avgFillEl.textContent=avgFill+'%';avgFillEl.className='sv '+(avgFill>60?'green':avgFill>30?'yellow':'red');}
+  var avgCpm=FLOOR_CPM;
+  if(cpmLog.length>0){var sum=cpmLog.reduce(function(a,b){return a+b.cpm;},0);avgCpm=sum/cpmLog.length;}
+  st('s-avg-cpm','$'+avgCpm.toFixed(2));
+  var rev=(S.done||0)*(avgCpm/1000);st('s-rev','$'+rev.toFixed(4));
+  var hrs=(Date.now()-t0)/3600000;var dayEst=hrs>0?(rev/hrs)*24:0;st('s-rev-day','$'+dayEst.toFixed(2));
+  var re=document.getElementById('s-rate');if(re){re.textContent=r+'%';re.className='sv '+(r>60?'green':r>30?'yellow':'red')}
+  var de=document.getElementById('s-dead');if(de)de.className='sv '+(S.dead>0?'red':'green');
+  rendSrc();rendCpmLog();rendFillByHour();}
+
+function rendFillByHour(){
+  var e=document.getElementById('fh-chart');if(!e)return;
+  var maxFills=Math.max(1,Math.max.apply(null,fillByHour.map(function(h){return h.fills;})));
+  var now=new Date().getHours();
+  var bars=fillByHour.map(function(h,i){
+    var pct=h.reqs>0?Math.round((h.fills/h.reqs)*100):0;
+    var heightPct=h.fills>0?Math.round((h.fills/maxFills)*100):2;
+    var color=pct>60?'#0f0':pct>30?'#f80':'#f44';if(h.reqs===0)color='#1a1a1a';
+    return'<div class="fh-col" style="'+(i===now?'outline:1px solid #444;':'')+'" title="'+i+':00 — '+h.fills+' fills / '+h.reqs+' req ('+pct+'%)"><div class="fh-fill" style="height:'+heightPct+'%;background:'+color+'"></div></div>';
+  }).join('');
+  var labels='<div style="display:flex;gap:2px;margin-top:2px">';
+  for(var i=0;i<24;i++){labels+='<div class="fh-label" style="flex:1;min-width:6px;color:'+(i===now?'#fff':'#333')+'">'+(i%6===0?i:'')+'</div>';}
+  labels+='</div>';
+  e.innerHTML='<div class="fh-bar">'+bars+'</div>'+labels+'<div style="color:#333;font-size:9px;margin-top:2px">Hover bar for hourly fill rate</div>';}
+
+function rendCpmLog(){
+  var e=document.getElementById('cpm-log');if(!e)return;
+  if(!cpmLog.length){e.innerHTML='<div style="color:#444;padding:4px">No ads played yet</div>';return;}
+  e.innerHTML=cpmLog.slice(0,20).map(function(c){
+    var cpmColor=c.cpm>=4?'#0f0':c.cpm>=3?'#f80':'#f44';
+    return'<div style="padding:3px 2px;border-bottom:1px solid #0a0a0a;font-size:10px"><span style="color:#333">'+c.ts+'</span> <span style="color:'+cpmColor+';font-weight:bold">$'+c.cpm.toFixed(2)+' CPM</span> <span style="color:#888">'+c.dur+'s</span> <span style="color:#555">'+c.source+'</span>'+(c.adv&&c.adv!=='?'?'<span style="color:#4af"> '+c.adv+'</span>':'')+(c.deal?'<div style="color:#555;font-size:9px">deal:'+c.deal+'</div>':'')+'</div>';
+  }).join('');}
 
 function rendSrc(){var e=document.getElementById('source-list');if(!e||!sources.length)return;
   e.innerHTML=sources.map(function(s,i){
-    var ss=srcStats[s.name]||{req:0,fills:0,err:0};
-    var rate=ss.req>0?Math.round((ss.fills/ss.req)*100):0;
+    var ss=srcStats[s.name]||{req:0,fills:0,err:0};var rate=ss.req>0?Math.round((ss.fills/ss.req)*100):0;
     var cls='srow',badge='';
     if(i===idx&&playing){cls+=' active';badge='<span class="badge b-live">LIVE</span>'}
     else if(i===idx&&!playing){cls+=' trying';badge='<span class="badge b-try">TRY</span>'}
     else if(ss.fills>0){cls+=' filled';badge='<span class="badge b-fill">FILL</span>'}
     else if(ss.err>0&&ss.fills===0){cls+=' errored';badge='<span class="badge b-err">ERR</span>'}
-    return'<div class="'+cls+'"><div class="sname">'+(i+1)+'. '+s.name.toUpperCase()+badge+'</div>'+
-      '<div class="sstats">Req:'+ss.req+' Fill:'+ss.fills+' Err:'+ss.err+
-      ' Rate:<span class="'+(rate>60?'green':rate>30?'yellow':rate>0?'red':'')+'">'+ rate+'%</span></div></div>'
+    return'<div class="'+cls+'"><div class="sname">'+(i+1)+'. '+s.name.toUpperCase()+badge+'<span style="color:#333;font-size:9px;margin-left:6px">⏱'+((s.timeout_ms||WATERFALL_TIMEOUT)/1000)+'s</span></div><div class="sstats">Req:'+ss.req+' Fill:'+ss.fills+' Err:'+ss.err+' Rate:<span class="'+(rate>60?'green':rate>30?'yellow':rate>0?'red':'')+'">'+rate+'%</span></div></div>'
   }).join('')}
 
-function rendEv(){var e=document.getElementById('tab-ev');if(!e)return;
-  e.innerHTML=pixEv.slice(0,40).map(function(e){
-    return'<div class="evrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
-
-function rendLog(){var e=document.getElementById('tab-lg');if(!e)return;
-  e.innerHTML=logs.slice(0,40).map(function(e){
-    return'<div class="logrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
-
-function rendLF(){var e=document.getElementById('pp-lf');if(!e)return;
-  e.innerHTML=pixEv.slice(0,50).map(function(e){
-    var d=e.url?'<div class="lfdest">to: '+dom(e.url)+'</div>':'';
-    return'<div class="lfrow '+e.type+'"><span style="color:#333">'+e.ts+'</span> '+e.msg+d+'</div>'
-  }).join('')||'<div style="color:#444;padding:8px">Waiting...</div>'}
+function rendEv(){var e=document.getElementById('tab-ev');if(!e)return;e.innerHTML=pixEv.slice(0,40).map(function(e){return'<div class="evrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
+function rendLog(){var e=document.getElementById('tab-lg');if(!e)return;e.innerHTML=logs.slice(0,60).map(function(e){return'<div class="logrow '+e.type+'"><span class="ts">'+e.ts+'</span>'+e.msg+'</div>'}).join('')}
+function rendLF(){var e=document.getElementById('pp-lf');if(!e)return;e.innerHTML=pixEv.slice(0,50).map(function(e){var d=e.url?'<div class="lfdest">to: '+dom(e.url)+'</div>':'';return'<div class="lfrow '+e.type+'"><span style="color:#333">'+e.ts+'</span> '+e.msg+d+'</div>'}).join('')||'<div style="color:#444;padding:8px">Waiting...</div>'}
 
 function refreshPP(){
   var testC=Object.keys(pixDest).filter(function(d){return pixDest[d].test}).length;
   var total=Object.keys(pixDest).length;
   st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',total);
   var be=document.getElementById('pp-billing');
-  if(be){if(testC>0){be.textContent='TEST';be.className='pp-card-v red'}
-    else if(total>0){be.textContent='PROD';be.className='pp-card-v green'}
-    else{be.textContent='?';be.className='pp-card-v'}}
+  if(be){if(testC>0){be.textContent='TEST';be.className='pp-card-v red'}else if(total>0){be.textContent='PROD';be.className='pp-card-v green'}else{be.textContent='?';be.className='pp-card-v'}}
   var ml=document.getElementById('pp-meta-list');
-  if(ml){
-    if(!adMeta.length){ml.innerHTML='<div style="color:#444;padding:8px">Wait for an ad to start playing</div>';}
-    else{
-      var metaHtml='<div style="color:#333;font-size:9px;margin-bottom:4px">'+adMetaTs+'</div>'+
-        adMeta.map(function(m){
-          return'<div style="display:flex;justify-content:space-between;border-bottom:1px solid #0a0a0a;padding:3px 0">'+
-            '<span style="color:#f80;font-size:10px;flex-shrink:0;margin-right:6px">'+m.k+'</span>'+
-            '<span style="color:#fff;font-size:10px;word-break:break-all;max-width:65%;text-align:right">'+m.v+'</span></div>';
-        }).join('');
-      if(vastPixels.length){
-        metaHtml+='<div style="color:#4af;font-size:9px;margin:8px 0 4px;letter-spacing:1px">VAST TRACKING URLS ('+vastPixels.length+')</div>'+
-          vastPixels.slice(0,20).map(function(p){
-            return'<div style="border-bottom:1px solid #0a0a0a;padding:2px 0">'+
-              '<span style="color:#555;font-size:9px">'+p.tag+': </span>'+
-              '<span style="color:#aaa;font-size:9px;word-break:break-all">'+p.url+'</span></div>';
-          }).join('');
-      }
-      ml.innerHTML=metaHtml;
-    }
-  }
+  if(ml){if(!adMeta.length){ml.innerHTML='<div style="color:#444;padding:8px">Wait for an ad to start playing</div>';}
+    else{var metaHtml='<div style="color:#333;font-size:9px;margin-bottom:4px">'+adMetaTs+'</div>'+adMeta.map(function(m){return'<div style="display:flex;justify-content:space-between;border-bottom:1px solid #0a0a0a;padding:3px 0"><span style="color:#f80;font-size:10px;flex-shrink:0;margin-right:6px">'+m.k+'</span><span style="color:#fff;font-size:10px;word-break:break-all;max-width:65%;text-align:right">'+m.v+'</span></div>';}).join('');
+      if(vastPixels.length){metaHtml+='<div style="color:#4af;font-size:9px;margin:8px 0 4px;letter-spacing:1px">VAST TRACKING URLS ('+vastPixels.length+')</div>'+vastPixels.slice(0,20).map(function(p){return'<div style="border-bottom:1px solid #0a0a0a;padding:2px 0"><span style="color:#555;font-size:9px">'+p.tag+': </span><span style="color:#aaa;font-size:9px;word-break:break-all">'+p.url+'</span></div>';}).join('');}
+      ml.innerHTML=metaHtml;}}
   var dl=document.getElementById('pp-dest-list');if(!dl)return;
   var doms=Object.keys(pixDest);
   if(!doms.length){dl.innerHTML='<div style="color:#444;padding:12px;text-align:center">No pixel traffic yet</div>';rendLF();return}
   dl.innerHTML=doms.map(function(domain){
-    var d=pixDest[domain];
-    var pp=pparams(d.urls[0]||'');
-    var collected=[];
-    var su=d.urls[0]||'';
-    if(su.indexOf('ppid=')>=0||su.indexOf('screen_id=')>=0)collected.push({k:'Screen ID',v:'Identifies your screen to the advertiser'});
-    if(su.indexOf('ifa=')>=0)collected.push({k:'Device ID (ifa)',v:'Hardware ID for frequency capping'});
-    if(su.indexOf('city=')>=0)collected.push({k:'City / State',v:'Location — New York NY'});
-    if(su.indexOf('daypart=')>=0)collected.push({k:'Daypart',v:'Time of day for targeting'});
-    if(su.indexOf('ua=')>=0)collected.push({k:'User Agent',v:'Browser/device info'});
-    if(su.indexOf('uip=')>=0)collected.push({k:'IP Address',v:'Geo-targeting and fraud detection'});
-    if(su.indexOf('venuetype=')>=0)collected.push({k:'Venue Type',v:'Transit/taxi contextual targeting'});
-    if(su.indexOf('schain=')>=0)collected.push({k:'Supply Chain',v:'trillboards.com verified schain'});
-    if(su.indexOf('cust_params=')>=0)collected.push({k:'Custom Params',v:'dow, dooh, daypart, venue_parent'});
-    if(su.indexOf('correlator=')>=0)collected.push({k:'Correlator',v:'Session ID — prevents duplicate impressions'});
-    if(pp.p['pzoneid'])collected.push({k:'Zone ID',v:'Vidverto zone: '+pp.p['pzoneid']});
+    var d=pixDest[domain];var su=d.urls[0]||'';var collected=[];
+    if(su.indexOf('ppid=')>=0||su.indexOf('screen_id=')>=0)collected.push({k:'Screen ID',v:'Identifies your screen'});
+    if(su.indexOf('ifa=')>=0)collected.push({k:'Device ID (ifa)',v:'Hardware ID'});
+    if(su.indexOf('city=')>=0)collected.push({k:'City / State',v:'Location'});
+    if(su.indexOf('daypart=')>=0)collected.push({k:'Daypart',v:'Time of day'});
+    if(su.indexOf('ua=')>=0)collected.push({k:'User Agent',v:'Browser/device'});
+    if(su.indexOf('uip=')>=0)collected.push({k:'IP Address',v:'Geo/fraud'});
+    if(su.indexOf('venuetype=')>=0)collected.push({k:'Venue Type',v:'Transit/taxi'});
+    if(su.indexOf('schain=')>=0)collected.push({k:'Supply Chain',v:'trillboards schain'});
+    var pp=pparams(su);if(pp.p['pzoneid'])collected.push({k:'Zone ID',v:'Vidverto zone: '+pp.p['pzoneid']});
     if(pp.p['iu'])collected.push({k:'Ad Unit',v:decodeURIComponent(pp.p['iu'])});
     var chHtml=collected.map(function(c){return'<div class="ddrow"><span class="ddk">'+c.k+'</span><span class="ddv">'+c.v+'</span></div>'}).join('');
-    return'<div class="dcard" onclick="togDest(this)">'+
-      '<div style="display:flex;justify-content:space-between">'+
-        '<div><div class="dname">'+d.type+'</div><div class="ddomain">'+domain+'</div></div>'+
-        '<div style="text-align:right;font-size:10px">'+
-          '<div class="'+(d.dead>0?'red':'green')+'">'+d.ok+' ok / '+d.dead+' dead</div>'+
-          '<div style="color:#444">'+d.count+' hits - '+d.last+'</div></div></div>'+
-      '<div class="dbadges">'+
-        (d.test?'<span class="dbadge db-test">TEST - NOT BILLING</span>':'<span class="dbadge db-prod">PRODUCTION - BILLING</span>')+
-        (d.dead>0?'<span class="dbadge db-dead">'+d.dead+' DEAD</span>':'<span class="dbadge db-ok">HEALTHY</span>')+
-      '</div>'+
-      '<div class="ddetail">'+
-        (collected.length?'<div class="dd-sec">Data Collected and Sent to This Destination</div>'+chHtml:'<div style="color:#444">No params found</div>')+
-        (d.urls[0]?'<div class="dd-sec">Sample Pixel URL</div><div class="dd-url">'+d.urls[0].substring(0,250)+'</div>':'')+
-      '</div></div>'
-  }).join('');
-  rendLF()}
+    return'<div class="dcard" onclick="togDest(this)"><div style="display:flex;justify-content:space-between"><div><div class="dname">'+d.type+'</div><div class="ddomain">'+domain+'</div></div><div style="text-align:right;font-size:10px"><div class="'+(d.dead>0?'red':'green')+'">'+d.ok+' ok / '+d.dead+' dead</div><div style="color:#444">'+d.count+' hits</div></div></div><div class="dbadges">'+(d.test?'<span class="dbadge db-test">TEST</span>':'<span class="dbadge db-prod">PROD</span>')+(d.dead>0?'<span class="dbadge db-dead">'+d.dead+' DEAD</span>':'<span class="dbadge db-ok">HEALTHY</span>')+'</div><div class="ddetail">'+(collected.length?'<div class="dd-sec">Data Collected</div>'+chHtml:'')+(d.urls[0]?'<div class="dd-sec">Sample URL</div><div class="dd-url">'+d.urls[0].substring(0,250)+'</div>':'')+'</div></div>'
+  }).join('');rendLF()}
 
 function togDest(card){var d=card.querySelector('.ddetail');if(d)d.classList.toggle('open')}
-function switchTab(t){
-  document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';
-  document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';
-  document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
-var IMP_URL='https://api.trillboards.com/v1/partner/impression';
-var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
+function switchTab(t){document.getElementById('tab-ev').style.display=t==='ev'?'block':'none';document.getElementById('tab-lg').style.display=t==='lg'?'block':'none';document.querySelectorAll('.tab').forEach(function(b,i){b.className='tab'+((['ev','lg'][i]===t)?' active':'')})}
 
-function generateId(){
-  return 'imp_'+Date.now()+'_'+Math.random().toString(36).substring(2,9);
-}
-
-function sendImpression(adid,aid,duration,completed){
-  var impid=generateId();
-  var params=new URLSearchParams({
-    adid: adid||'unknown',
-    impid: impid,
-    did: DEVICE_ID,
-    sid: SCREEN_ID,
-    aid: aid||'',
-    duration: duration||0,
-    completed: completed?'true':'false',
-    display_mode: 'fullscreen',
-    display_area_ratio: '1.0'
-  });
-  fetch(IMP_URL+'?'+params.toString(),{
-    method:'POST',
-    headers:{
-      'Authorization':'Bearer '+HB_KEY,
-      'Content-Type':'application/json'
-    }
-  }).then(function(r){
-    log('Impression POST OK ('+r.status+') adid:'+adid,'ok');
-    addEv('imp','IMP SENT TO TRILLBOARDS: '+(adid||'unknown'),'');
-  }).catch(function(e){
-    log('Impression POST FAIL: '+e.message,'err');
-  });
+// ── HEARTBEAT WITH UA DEVICE PARSING ─────────────────────────
+function parseDeviceInfo(){
+  var ua=navigator.userAgent;
+  var model='Unknown',osVersion='Android',make='Android';
+  var mOS=ua.match(/Android\s([\d.]+)/);
+  if(mOS)osVersion='Android '+mOS[1];
+  var mModel=ua.match(/\(Linux;\sAndroid[\d\s.]+;\s([^)]+?)\sBuild\//);
+  if(mModel)model=mModel[1].trim();
+  else{var mModel2=ua.match(/\(Linux;\sAndroid[\d\s.]+;\s([^)]+?)\)/);if(mModel2)model=mModel2[1].trim();}
+  var mMake=model.split(/[\s-]/)[0];
+  if(mMake&&mMake.length>1)make=mMake;
+  return{make:make,model:model,os_version:osVersion};
 }
 
 function sendHeartbeat(){
+  var dev=parseDeviceInfo();
   fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({device_id:'P_691cbdd4b3117cb1b692f4ae',timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0})
-  }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}log('HB OK ('+r.status+')','ok');
+    body:JSON.stringify({device_id:DEVICE_ID,timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0,make:'Samsung',model:dev.model,os_version:dev.os_version,device_category:'tablet',venue_type:'transit',screen_id:SCREEN_ID,device:{os:'Android',osv:'11',make:'Samsung',model:dev.model},sdk:{ima_supported:true,ima_integration:'html5_webview'}})
+  }).then(function(r){S_hbOk++;var e=document.getElementById('s-hb');if(e){e.textContent='OK #'+S_hbOk;e.style.color='#0f0';}trackBytes('hb','hb',256);log('HB OK ('+r.status+') ['+dev.model+']','ok');return r.json();
+  }).then(function(data){
+    if(data&&data.refresh_interval){var ms=Math.max(30000,data.refresh_interval*1000);if(ms!==HB_INTERVAL_MS){HB_INTERVAL_MS=ms;log('HB interval updated to '+(ms/1000)+'s from server','info');var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=Math.round(ms/1000)+'s';}}
   }).catch(function(e){S_hbFail++;var el=document.getElementById('s-hb');if(el){el.textContent='FAIL';el.style.color='#f44';}var f=document.getElementById('s-hb-fail');if(f)f.textContent=S_hbFail;log('HB FAIL: '+e.message,'err');});
 }
 
+function logAdCpm(ad,sourceName,advertiser){
+  var ts=new Date().toTimeString().substring(0,8);var dur=cachedDur||0,tp='',deal='',cpm=FLOOR_CPM,system='';
+  try{var tpObj=ad&&ad.getTraffickingParameters?ad.getTraffickingParameters():{};var cpmKeys=['cpm','CPM','price','Price','deal_price','bid_price','clearing_price'];for(var i=0;i<cpmKeys.length;i++){if(tpObj[cpmKeys[i]]){var v=parseFloat(tpObj[cpmKeys[i]]);if(!isNaN(v)&&v>0){cpm=v;break;}}}var tpKeys=Object.keys(tpObj);if(tpKeys.length>0)tp=tpKeys.map(function(k){return k+'='+tpObj[k];}).join(' ');}catch(e){}
+  try{deal=(ad&&ad.getDealId)?ad.getDealId():'';}catch(e){}
+  try{system=(ad&&ad.getAdSystem)?ad.getAdSystem():'';}catch(e){}
+  cpmLog.unshift({ts:ts,adId:cachedAdId,adv:advertiser||'?',dur:dur,source:sourceName,cpm:cpm,deal:deal,tp:tp,system:system});
+  if(cpmLog.length>50)cpmLog.pop();
+  log('CPM: $'+cpm.toFixed(2)+' ad:'+cachedAdId+' src:'+sourceName+(deal?' deal:'+deal:''),'ok');}
+
 function dumpAdMeta(ad){
-  var ts=new Date().toTimeString().substring(0,8);
-  var info=[];
+  var ts=new Date().toTimeString().substring(0,8);var info=[];
   try{if(ad.getAdId&&ad.getAdId())info.push({k:'Ad ID',v:ad.getAdId()});}catch(e){}
   try{if(ad.getCreativeId&&ad.getCreativeId())info.push({k:'Creative ID',v:ad.getCreativeId()});}catch(e){}
   try{if(ad.getAdvertiserName&&ad.getAdvertiserName())info.push({k:'Advertiser',v:ad.getAdvertiserName()});}catch(e){}
   try{if(ad.getTitle&&ad.getTitle())info.push({k:'Title',v:ad.getTitle()});}catch(e){}
   try{if(ad.getAdSystem&&ad.getAdSystem())info.push({k:'Ad System',v:ad.getAdSystem()});}catch(e){}
+  try{if(ad.getDealId&&ad.getDealId())info.push({k:'Deal ID',v:ad.getDealId()});}catch(e){}
   try{if(ad.getMediaUrl&&ad.getMediaUrl())info.push({k:'Media URL',v:ad.getMediaUrl()});}catch(e){}
   try{if(ad.getDuration)info.push({k:'Duration',v:Math.round(ad.getDuration())+'s'});}catch(e){}
   try{if(ad.getContentType&&ad.getContentType())info.push({k:'Content Type',v:ad.getContentType()});}catch(e){}
   try{if(ad.getWidth)info.push({k:'Size',v:ad.getWidth()+'x'+ad.getHeight()});}catch(e){}
-  adMeta=info;adMetaTs=ts;
-  log('Ad meta: '+info.length+' fields','ok');
-  var src=sources[idx]||sources[0];
-  if(src&&src.vast_url) fetchVastPixels(src.vast_url);
-}
+  try{var tp=ad.getTraffickingParameters?ad.getTraffickingParameters():{};var tpKeys=Object.keys(tp);if(tpKeys.length>0)info.push({k:'Trafficking Params',v:tpKeys.map(function(k){return k+'='+tp[k];}).join(', ')});}catch(e){}
+  adMeta=info;adMetaTs=ts;log('Ad meta: '+info.length+' fields','ok');
+  var src=sources[idx]||sources[0];if(src&&src.vast_url)fetchVastPixels(src.vast_url);}
 
 function fetchVastPixels(vastUrl){
-  log('Fetching VAST XML...','info');
-  var xhr=new XMLHttpRequest();
-  xhr.open('GET',vastUrl,true);
-  xhr.onload=function(){ if(xhr.status>=200&&xhr.status<400){ parseVastPixels(xhr.responseText); } else { log('VAST fetch failed: '+xhr.status,'warn'); } };
-  xhr.onerror=function(){ log('VAST fetch error','warn'); };
-  xhr.send();
-}
+  log('Fetching VAST XML...','info');trackBytes('vast','vast',800);
+  var xhr=new XMLHttpRequest();xhr.open('GET',vastUrl,true);
+  xhr.onload=function(){if(xhr.status>=200&&xhr.status<400){parseVastPixels(xhr.responseText);}else{log('VAST fetch failed: '+xhr.status,'warn');}};
+  xhr.onerror=function(){log('VAST fetch error','warn');};xhr.send();}
 
 function parseVastPixels(xml){
   var urls=[];
   var tags=['Impression','Tracking','ClickTracking','ErrorUri','ViewableImpression','NotViewableImpression'];
   tags.forEach(function(tag){
-    var re=new RegExp('<'+tag+'[^>]*>\s*<!\[CDATA\[([^\]]+)\]\]>\s*</'+tag+'>','gi');
-    var m;
-    while((m=re.exec(xml))!==null){ var u=m[1].trim(); if(u) urls.push({tag:tag,url:u}); }
+    var re=new RegExp('<'+tag+'[^>]*>\\s*<!\\[CDATA\\[([^\\]]+)\\]\\]>\\s*</'+tag+'>','gi'),m;
+    while((m=re.exec(xml))!==null){var u=m[1].trim();if(u)urls.push({tag:tag,url:u});}
     var re2=new RegExp('<'+tag+'[^>]*>([^<]+)</'+tag+'>','gi');
-    while((m=re2.exec(xml))!==null){ var u=m[1].trim(); if(u&&u.indexOf('http')===0) urls.push({tag:tag,url:u}); }
+    while((m=re2.exec(xml))!==null){var u=m[1].trim();if(u&&u.indexOf('http')===0)urls.push({tag:tag,url:u});}
   });
-  log('VAST parsed: '+urls.length+' tracking URLs','ok');
-  vastPixels=urls;
-  urls.forEach(function(item){
-    var u=item.url,d=dom(u);
+  try{var extRe=/<Extension[^>]*type="[^"]*price[^"]*"[^>]*>([\s\S]*?)<\/Extension>/gi,em;
+    while((em=extRe.exec(xml))!==null){var pm=/<Price[^>]*>([\s\S]*?)<\/Price>/i.exec(em[1]);
+      if(pm){var pv=parseFloat(pm[1].trim());if(!isNaN(pv)&&pv>0){log('VAST price: $'+pv.toFixed(2),'ok');if(cpmLog.length>0&&cpmLog[0].cpm===FLOOR_CPM)cpmLog[0].cpm=pv;}}}
+  }catch(e){}
+  log('VAST parsed: '+urls.length+' tracking URLs','ok');vastPixels=urls;
+  urls.forEach(function(item){var u=item.url,d=dom(u);
     if(!pixDest[d])pixDest[d]={type:ptype(u),count:0,ok:0,dead:0,last:'VAST',urls:[],test:u.indexOf('/test/')>=0&&u.indexOf('pixel.gif')<0};
-    if(!pixDest[d].urls.some(function(x){return x===u;}))pixDest[d].urls.push(u);
-    pixDest[d].count++;
-  });
-  addEv('imp','VAST: '+urls.length+' tracking URLs parsed','');
-}
+    if(!pixDest[d].urls.some(function(x){return x===u;}))pixDest[d].urls.push(u);pixDest[d].count++;});
+  addEv('imp','VAST: '+urls.length+' tracking URLs parsed','');}
 
-// Block touch/click on ad to prevent pause
 document.addEventListener('DOMContentLoaded',function(){
   var blocker=document.getElementById('touch-blocker');
   if(blocker){
-    blocker.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();},true);
-    blocker.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();},true);
-    blocker.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();},true);
-  }
+    var BTNS=['btn-stats','btn-pixels','btn-set','btn-data'];
+    function isBtn(e){return BTNS.indexOf(e.target.id)>=0;}
+    blocker.addEventListener('touchstart',function(e){if(isBtn(e))return;e.preventDefault();e.stopPropagation();},true);
+    blocker.addEventListener('touchend',function(e){if(isBtn(e))return;e.preventDefault();e.stopPropagation();},true);
+    blocker.addEventListener('click',function(e){if(isBtn(e))return;e.preventDefault();e.stopPropagation();},true);}
   var ad=document.getElementById('ad-container');
-  if(ad){
-    ad.addEventListener('touchstart',function(e){
-      // only block if not hitting our buttons
-      if(e.target.id!=='btn-stats'&&e.target.id!=='btn-pixels'){
-        e.preventDefault();
-      }
-    },{passive:false});
+  if(ad){ad.addEventListener('touchstart',function(e){var id=e.target.id;if(id==='btn-stats'||id==='btn-pixels'||id==='btn-set'||id==='btn-data')return;e.preventDefault();},{passive:false});}});
+
+function formatBytes(b){if(b<1024)return b.toFixed(0)+' B';if(b<1048576)return(b/1024).toFixed(2)+' KB';if(b<1073741824)return(b/1048576).toFixed(2)+' MB';return(b/1073741824).toFixed(2)+' GB';}
+function trackBytes(url,type,bytes){DU.bytes+=bytes;DU.reqs++;if(type==='video')DU.video+=bytes;else if(type==='vast')DU.vast+=bytes;else if(type==='pixel')DU.pixels+=bytes;else if(type==='hb')DU.hb+=bytes;else if(type==='imp')DU.imp+=bytes;else if(type==='api')DU.api+=bytes;}
+
+function toggleData(){var p=document.getElementById('data-panel');if(!p)return;var showing=p.style.display!=='none';p.style.display=showing?'none':'block';if(!showing)refreshDataPanel();}
+function refreshDataPanel(){
+  var stf=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+  stf('du-session',formatBytes(DU.bytes));stf('du-session-req',DU.reqs+' requests');
+  var hrs=(Date.now()-DU.t0)/3600000,daily=hrs>0?(DU.bytes/hrs)*24:0;
+  stf('du-daily',formatBytes(daily));stf('du-monthly',formatBytes(daily*30));stf('du-fleet',formatBytes(daily*30*9000));
+  stf('du-video',formatBytes(DU.video));stf('du-vast',formatBytes(DU.vast));stf('du-pixels',formatBytes(DU.pixels));
+  stf('du-hb',formatBytes(DU.hb));stf('du-imp',formatBytes(DU.imp));stf('du-api',formatBytes(DU.api));
+  var avgDur=DU.adDurs.length>0?(DU.adDurs.reduce(function(a,b){return a+b;},0)/DU.adDurs.length).toFixed(0)+'s':'0s';
+  stf('du-per-ad',DU.adDurs.length>0?formatBytes(DU.bytes/DU.adDurs.length):'0 B');stf('du-ads-played',DU.adDurs.length);stf('du-avg-dur',avgDur);}
+function resetDataUsage(){DU={bytes:0,reqs:0,video:0,vast:0,pixels:0,hb:0,imp:0,api:0,adDurs:[],t0:Date.now()};refreshDataPanel();}
+
+function toggleSettings(){var p=document.getElementById('set-panel');if(!p)return;var showing=p.style.display!=='none';p.style.display=showing?'none':'block';if(!showing)loadSettingsUI();}
+function loadSettingsUI(){
+  try{
+    var ci=document.getElementById('set-cpm');if(ci)ci.value=FLOOR_CPM.toFixed(2);
+    var cc=document.getElementById('set-cpm-cur');if(cc)cc.textContent='$'+FLOOR_CPM.toFixed(2);
+    var ii=document.getElementById('set-interval');if(ii)ii.value=Math.round(INTERVAL/1000);
+    var ic=document.getElementById('set-interval-cur');if(ic)ic.textContent=Math.round(INTERVAL/1000)+'s';
+    var hi=document.getElementById('set-hb');if(hi)hi.value=Math.round(HB_INTERVAL_MS/1000);
+    var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=Math.round(HB_INTERVAL_MS/1000)+'s';
+    var ti=document.getElementById('set-timeout');if(ti)ti.value=Math.round(WATERFALL_TIMEOUT/1000);
+    var tc=document.getElementById('set-timeout-cur');if(tc)tc.textContent=Math.round(WATERFALL_TIMEOUT/1000)+'s';
+    var di=document.getElementById('set-did');if(di)di.value=DEVICE_ID;
+    var dc=document.getElementById('set-did-cur');if(dc)dc.textContent=DEVICE_ID;
+    var si=document.getElementById('set-sid');if(si)si.value=SCREEN_ID;
+    var sc=document.getElementById('set-sid-cur');if(sc)sc.textContent=SCREEN_ID;
+    var kc=document.getElementById('set-key-cur');if(kc)kc.textContent='trb_partner_****';
+    var fi=document.getElementById('set-force');if(fi)fi.value=FORCED_SOURCE||0;
+    var fc=document.getElementById('set-force-cur');if(fc)fc.textContent=FORCED_SOURCE?'Source '+FORCED_SOURCE:'auto';
+    var hb=document.getElementById('set-hide-btn');if(hb){hb.textContent=UI_HIDDEN?'ON':'OFF';hb.style.color=UI_HIDDEN?'#0f0':'#aaa';}
+    var tb=document.getElementById('set-test-btn');if(tb){tb.textContent=TEST_MODE?'ON':'OFF';tb.style.color=TEST_MODE?'#0f0':'#aaa';}
+    var br=document.getElementById('set-bright');if(br)br.value=BRIGHTNESS;
+    var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=BRIGHTNESS;
+    var cfgStatus=document.getElementById('set-cfg-status');if(cfgStatus)cfgStatus.textContent=lastConfigTs?'OK':'POLLING...';
+    var cfgTs=document.getElementById('set-cfg-ts');if(cfgTs)cfgTs.textContent=lastConfigTs||'never';
+    var cfgPoll=document.getElementById('set-cfg-poll');if(cfgPoll)cfgPoll.textContent=Math.round(CONFIG_POLL_MS/1000)+'s';
+    var cfgKv=document.getElementById('set-cfg-kv');if(cfgKv)cfgKv.textContent=REMOTE_CONFIG.kv_enabled===false?'disabled':'enabled';
+  }catch(e){console.log('loadSettingsUI error:',e);}}
+
+function saveSetting(key){
+  var val,el;
+  switch(key){
+    case 'cpm':el=document.getElementById('set-cpm');if(!el)return;val=parseFloat(el.value);if(isNaN(val)||val<=0)return;FLOOR_CPM=val;try{localStorage.setItem('curb_cpm',val);}catch(e){}var cc=document.getElementById('set-cpm-cur');if(cc)cc.textContent='$'+val.toFixed(2);var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+val.toFixed(2);log('CPM set to $'+val.toFixed(2),'ok');break;
+    case 'interval':el=document.getElementById('set-interval');if(!el)return;val=parseInt(el.value);if(isNaN(val)||val<5)return;INTERVAL=val*1000;try{localStorage.setItem('curb_interval',val);}catch(e){}var ic=document.getElementById('set-interval-cur');if(ic)ic.textContent=val+'s';log('Interval set to '+val+'s','ok');break;
+    case 'hb':el=document.getElementById('set-hb');if(!el)return;val=parseInt(el.value);if(isNaN(val)||val<10)return;HB_INTERVAL_MS=val*1000;try{localStorage.setItem('curb_hb',val);}catch(e){}var hc=document.getElementById('set-hb-cur');if(hc)hc.textContent=val+'s';log('HB interval set to '+val+'s','ok');break;
+    case 'timeout':el=document.getElementById('set-timeout');if(!el)return;val=parseInt(el.value);if(isNaN(val)||val<3)return;WATERFALL_TIMEOUT=val*1000;try{localStorage.setItem('curb_timeout',val);}catch(e){}var tc=document.getElementById('set-timeout-cur');if(tc)tc.textContent=val+'s';log('Timeout set to '+val+'s','ok');break;
+    case 'did':el=document.getElementById('set-did');if(!el)return;val=el.value.trim();if(!val)return;DEVICE_ID=val;HB_URL='https://api.trillboards.com/v1/partner/device/'+val+'/heartbeat';try{localStorage.setItem('curb_did',val);}catch(e){}var dc=document.getElementById('set-did-cur');if(dc)dc.textContent=val;log('Device ID: '+val,'ok');break;
+    case 'sid':el=document.getElementById('set-sid');if(!el)return;val=el.value.trim();if(!val)return;SCREEN_ID=val;try{localStorage.setItem('curb_sid',val);}catch(e){}var sc=document.getElementById('set-sid-cur');if(sc)sc.textContent=val;log('Screen ID: '+val,'ok');break;
+    case 'key':el=document.getElementById('set-key');if(!el)return;val=el.value.trim();if(!val)return;HB_KEY=val;API_KEY=val;try{localStorage.setItem('curb_key',val);}catch(e){}log('API key updated','ok');break;
+    case 'force':el=document.getElementById('set-force');if(!el)return;val=parseInt(el.value)||0;FORCED_SOURCE=val;try{localStorage.setItem('curb_force',val);}catch(e){}var fc=document.getElementById('set-force-cur');if(fc)fc.textContent=val?'Source '+val:'auto';log('Force source: '+(val||'auto'),'ok');break;
   }
-});
+  flashSaved();}
+
+function flashSaved(){var e=document.getElementById('set-saved');if(e){e.style.display='block';setTimeout(function(){e.style.display='none';},2000);}}
+function toggleHideUI(){UI_HIDDEN=!UI_HIDDEN;try{localStorage.setItem('curb_hide_ui',UI_HIDDEN?'1':'0');}catch(e){}applyHideUI();var btn=document.getElementById('set-hide-btn');if(btn){btn.textContent=UI_HIDDEN?'ON':'OFF';btn.style.color=UI_HIDDEN?'#0f0':'#aaa';}if(UI_HIDDEN)toggleSettings();log('UI '+(UI_HIDDEN?'hidden':'visible'),'ok');}
+function applyHideUI(){
+  ['btn-stats','btn-pixels','btn-set'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=UI_HIDDEN?'none':'block';});
+  if(UI_HIDDEN){var tapCount=0,tapTimer=null;document.addEventListener('touchstart',function handler(e){if(e.touches[0].clientX<80&&e.touches[0].clientY<80){tapCount++;clearTimeout(tapTimer);tapTimer=setTimeout(function(){tapCount=0;},2000);if(tapCount>=5){UI_HIDDEN=false;try{localStorage.setItem('curb_hide_ui','0');}catch(err){}applyHideUI();document.removeEventListener('touchstart',handler);}}});}}
+function setFontSize(val){FONT_SIZE=parseInt(val);try{localStorage.setItem('curb_font',val);}catch(e){}['stats-panel','pixel-panel'].forEach(function(id){var p=document.getElementById(id);if(p)p.style.fontSize=val+'px';});var fv=document.getElementById('set-font-val');if(fv)fv.textContent=val;}
+function setBrightness(val){BRIGHTNESS=parseInt(val);try{localStorage.setItem('curb_bright',val);}catch(e){}document.body.style.filter='brightness('+val+'%)';var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=val;}
+function toggleTestMode(){TEST_MODE=!TEST_MODE;try{localStorage.setItem('curb_test',TEST_MODE?'1':'0');}catch(e){}var btn=document.getElementById('set-test-btn');if(btn){btn.textContent=TEST_MODE?'ON':'OFF';btn.style.color=TEST_MODE?'#0f0':'#aaa';}log('Test mode '+(TEST_MODE?'ON':'OFF'),'ok');}
+function clearStats(){S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};srcStats={};pixEv=[];pixDest={};logs=[];cpmLog=[];fillHistory=[];postHistory=[];offlineQueue=[];for(var i=0;i<24;i++)fillByHour[i]={fills:0,reqs:0};updStats();rendEv();rendLog();rendLF();rendCpmLog();rendPostHistory();log('Stats cleared','ok');flashSaved();}
+function reloadSources(){toggleSettings();log('Reloading waterfall sources...','info');fetchSources(false);}
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
 function togglePixels(){var p=document.getElementById('pixel-panel');p.classList.toggle('open');if(p.classList.contains('open'))refreshPP()}
 
@@ -440,24 +829,72 @@ setInterval(function(){
   var e=Math.floor((Date.now()-t0)/1000),h=Math.floor(e/3600),m=Math.floor((e%3600)/60),s=e%60;
   st('uptime','UP: '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));
   if(cdown){var left=Math.max(0,Math.ceil((cdown-Date.now())/1000));st('s-next',left>0?left+'s':'now')}
-  if(document.getElementById('pixel-panel').classList.contains('open')){
-    st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',Object.keys(pixDest).length)}
+  if(document.getElementById('pixel-panel').classList.contains('open')){st('pp-fired',S.imp);st('pp-dead',S.dead);st('pp-dests',Object.keys(pixDest).length)}
 },1000);
 
+function clearWatchdog(){clearTimeout(watchdogTimer);watchdogTimer=null;}
+function startWatchdog(ms){
+  ms=ms||WATERFALL_TIMEOUT;clearWatchdog();
+  watchdogTimer=setTimeout(function(){
+    var s=sources[idx];
+    log('WATCHDOG: '+(s?s.name:'?')+' timed out after '+ms/1000+'s — moving on','warn');
+    if(s){srcStats[s.name].err++;S.err++;}
+    playing=false;
+    if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
+    rebuildLoader();idx++;updStats();reqNext();
+  },ms);
+}
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
 
-function fetchSources(){
-  log('Fetching waterfall sources...','info');setNP('FETCHING...','Calling API');
-  fetch(API_URL,{headers:{'Authorization':'Bearer '+API_KEY}})
+// ── MODIFIED: fetchSources now picks up poll_interval_s, retry_on_error_s,
+//    and vast_urls[] from the /ads response. Error path uses RETRY_ON_ERROR_S.
+//    afterCycle=true means IMA is already inited — skip initIMA(), go to reqNext().
+function fetchSources(background, afterCycle){
+  log((background?'Background':'Fetching')+' waterfall sources...','info');trackBytes('api','api',2048);
+  if(!background)setNP('FETCHING...','Calling API');
+  var adsParams='?slot_w='+window.innerWidth+'&slot_h='+window.innerHeight+'&orientation=landscape&muted=0&autoplay=1&ua='+encodeURIComponent(navigator.userAgent);
+  fetch(API_URL+adsParams,{headers:{'Authorization':'Bearer '+API_KEY}})
   .then(function(r){return r.json()})
   .then(function(data){
-    if(data.success&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
+    // NEW: pick up server-controlled timing fields
+    if(data.poll_interval_s){POLL_INTERVAL_S=data.poll_interval_s;updServerIntervalDisplay();}
+    if(data.retry_on_error_s){RETRY_ON_ERROR_S=data.retry_on_error_s;updServerIntervalDisplay();}
+
+    // NEW: support vast_urls[] array in addition to existing vast_waterfall structure
+    var gotSources=false;
+    if(data.vast_urls&&data.vast_urls.length){
+      sources=data.vast_urls.map(function(url,i){return{name:'source_'+(i+1),vast_url:url,priority:i+1,timeout_ms:WATERFALL_TIMEOUT};});
+      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
+      log('Got '+sources.length+' sources from vast_urls[]'+(background?' (background)':''),'ok');
+      gotSources=true;
+    } else if(data.success&&data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
       sources=data.data.header_bidding_settings.vast_waterfall.sources;
       sources.sort(function(a,b){return a.priority-b.priority});
-      sources.forEach(function(s){srcStats[s.name]={req:0,fills:0,err:0}});
-      log('Got '+sources.length+' sources','ok');rendSrc();initIMA()
-    }else{log('No sources — retry 30s','warn');setNP('NO SOURCES','Retrying 30s');sched(30000)}
-  }).catch(function(e){log('API error: '+e.message,'err');setNP('API ERROR',e.message);sched(30000)})}
+      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
+      log('Got '+sources.length+' sources from vast_waterfall'+(background?' (background)':''),'ok');
+      gotSources=true;
+    }
+
+    if(gotSources){
+      rendSrc();
+      if(afterCycle){
+        // IMA already inited — just reset index and go
+        idx=0;rebuildLoader();
+        setNP('WAITING','Next in '+POLL_INTERVAL_S+'s');
+        sched(POLL_INTERVAL_S*1000);
+      } else if(!background){
+        initIMA();
+      }
+    } else {
+      log('No sources — retry in '+RETRY_ON_ERROR_S+'s','warn');
+      if(!background){setNP('NO SOURCES','Retrying in '+RETRY_ON_ERROR_S+'s');sched(RETRY_ON_ERROR_S*1000);}
+    }
+  }).catch(function(e){
+    // NEW: use RETRY_ON_ERROR_S instead of hardcoded 30000
+    log('API error: '+e.message+' — retry in '+RETRY_ON_ERROR_S+'s','err');
+    if(!background&&!afterCycle){setNP('API ERROR',e.message);} 
+    sched(RETRY_ON_ERROR_S*1000);  // always re-arm, never die
+  })}
 
 function initIMA(){
   log('IMA ready','ok');
@@ -468,101 +905,287 @@ function initIMA(){
   adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
   idx=0;reqNext()}
 
+function rebuildLoader(){
+  if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
+  if(adsLoader){try{adsLoader.destroy();}catch(e){}adsLoader=null;}
+  adsLoader=new google.ima.AdsLoader(adDisplayContainer);
+  adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
+  adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
+  log('Loader rebuilt','info');}
+
 function reqNext(){
   clearTimeout(nextTimer);cdown=null;st('s-next','-');
+  correlator=Date.now();  // fresh correlator every request
+  var hour=new Date().getHours();
   if(idx>=sources.length){
-    log('All exhausted - '+INTERVAL/1000+'s wait','warn');
-    setNP('NO FILL','All '+sources.length+' sources failed');
-    idx=0;updStats();sched(INTERVAL);return}
+    fillHistory.push(0);fillByHour[hour].reqs++;
+    log('All exhausted — retry in '+INTERVAL/1000+'s','warn');
+    setNP('NO FILL','All sources failed — retry in '+INTERVAL/1000+'s');
+    idx=0;rebuildLoader();updStats();sched(INTERVAL);return}
+  if(idx===0){
+    var nowMin=Math.floor(Date.now()/60000);
+    if(nowMin!==lastCycleMinute){lastCycleMinute=nowMin;cyclesThisMinute=0;}
+    if(cyclesThisMinute>=MAX_PER_MIN){log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn');sched(INTERVAL);return;}
+    cyclesThisMinute++;S.req++;updStats();
+    if(REMOTE_CONFIG.kv_enabled!==false){fetch(KV_URL,{method:'POST',headers:{'X-Proxy-Secret':KV_SECRET,'Content-Type':'application/json'},body:JSON.stringify({type:'request',ad_id:'',screen_id:SCREEN_ID,device_id:DEVICE_ID,duration_ms:0,completed:false,impression_id:''})}).catch(function(){});}
+  }
   var s=sources[idx];
   log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
-  srcStats[s.name].req++;S.req++;updStats();
+  srcStats[s.name].req++;
   var req=new google.ima.AdsRequest();
-  req.adTagUrl=s.vast_url;
+  var sep=s.vast_url.indexOf('?')>=0?'&':'?';
+  var geoStr=(gpsLat&&gpsLng)?'&lat='+gpsLat+'&long='+gpsLng+'&venuetype=4':'';
+  req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,correlator)+sep+'correlator='+correlator+'&ppid='+SCREEN_ID+geoStr;
   req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
   req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
-  try{adsLoader.requestAds(req)}catch(e){
-    log('Threw: '+s.name+' '+e.message,'err');
-    srcStats[s.name].err++;S.err++;idx++;reqNext()}}
+  var cb=Date.now()+''+Math.floor(Math.random()*99999);  // unique cachebuster per request
+  req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,cb);
+  // Let IMA attempt all sources including VPAID — tracking pixels fire even on 901 errors
+  try{adsLoader.requestAds(req);startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT);}catch(e){log('Threw: '+s.name+' '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
 
 function onLoaded(event){
-  var s=sources[idx];
-  log('Manager loaded: '+s.name,'ok');
+  var s=sources[idx];log('Manager loaded: '+s.name,'ok');
   if(adsManager){try{adsManager.destroy()}catch(e){}}
   adsManager=event.getAdsManager(vid);
   adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
   adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED,onDone,false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){
-    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';
-      setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';
-    var dur=(ad&&ad.getDuration)?Math.round(ad.getDuration())+'s':'?s';
-    log('STARTED - '+s.name+' - '+adv,'ok');
-    addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
-    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;
-    playing=true;adT0=Date.now();setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);updStats();
-    if(ad)dumpAdMeta(ad);
-  },false);
+    cachedAdId='';cachedAid='';cachedDur=0;cacheAdInfo(ad);
+    var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';var dur=cachedDur?cachedDur+'s':'?s';var hour=new Date().getHours();
+    log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
+    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;fillByHour[hour].reqs++;
+    clearWatchdog();playing=true;adT0=Date.now();if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
+    document.getElementById('ad-container').style.display='block';
+    document.getElementById('idle-screen').style.display='none';
+    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
-    S.imp++;S.rev+=FLOOR_CPM/1000;addEv('imp','IMPRESSION FIRED - '+s.name,'');updStats();
-    var adid=ad?ad.getAdId():'unknown';var aid=ad?ad.getDealId():'';var dur=ad?Math.round(ad.getDuration()):0;
-    sendImpression(adid,aid,dur,false);},false);
+    S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);
+    sendImpressionWithRetry(cachedAdId||'unknown',cachedDur||0,false,0,false);},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){addEv('q','75% - '+s.name,'')},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);addEv('q','75% - '+s.name,'');},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
-    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
-    var adid=ad?ad.getAdId():'unknown';var aid=ad?ad.getDealId():'';var dur=ad?Math.round(ad.getDuration()):0;
-    sendImpression(adid,aid,dur,true);
+    try{var ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);}catch(e){}
+    if(!cachedAdId||cachedAdId==='unknown'){log('COMPLETE — ad ID still unknown, sending with cached: '+cachedAdId,'warn');}
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
-    log('COMPLETE - '+s.name+' - '+p,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;updStats()},false);
+    log('COMPLETE - '+s.name+' - '+p+' - adid:'+cachedAdId,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
+    S.done++;updStats();resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
-    var rs=new google.ima.AdsRenderingSettings();
-    rs.uiElements=[];
-    rs.skipDelay=-1;
-    rs.disableUi=true;
+    var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
+    rs.mimeTypes=['video/mp4','video/webm','video/3gpp','application/javascript'];
+    rs.loadVideoTimeout=15000;
+    rs.enablePreloading=true;
     adsManager.updateAdsRenderingSettings(rs);
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
-    // Force hide skip and pause via CSS
-    setTimeout(function(){
-      var style=document.createElement('style');
-      style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}'+
-        '.ima-controls-div{display:none!important;}'+
-        '.ima-mute-button{display:none!important;}'+
-        '.ima-pause-button{display:none!important;}'+
-        '[class*="skip"]{display:none!important;}'+
-        '[class*="pause"]{display:none!important;}'+
-        '[id*="skip"]{display:none!important;}';
-      document.head.appendChild(style);
-    },500);
-    idx=0
-  }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;idx++;reqNext()}}
+    setTimeout(function(){var style=document.createElement('style');style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}.ima-controls-div{display:none!important;}.ima-mute-button{display:none!important;}.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';document.head.appendChild(style);},500);
+    idx=0;
+  }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
 
 function onErr(event){
-  var s=sources[idx];
+  clearWatchdog();var s=sources[idx];
   var er=event.getError?event.getError().toString():'unknown';
-  log('ERROR - '+(s?s.name:'?')+' - '+er.substring(0,60),'err');
-  addEv('err','ERROR - '+(s?s.name:'?'),'');
+  var erCode=event.getError&&event.getError().getErrorCode?event.getError().getErrorCode():0;
+  var noFill=(erCode===303||erCode===1205||er.indexOf('empty')>=0||er.indexOf('no ad')>=0||er.indexOf('VAST_EMPTY')>=0);
+  log((noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+' ['+erCode+'] - '+er.substring(0,60),'err');
+  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+(noFill?' (empty VAST)':' ('+erCode+')'),'');
   if(s){srcStats[s.name].err++;S.err++}
   playing=false;
+  document.getElementById('ad-container').style.display='none';
+  document.getElementById('idle-screen').style.display='flex';
   if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
-  idx++;updStats();setTimeout(reqNext,500)}
+  rebuildLoader();idx++;updStats();setTimeout(reqNext,500)}
 
+// ── MODIFIED: onDone now re-fetches /ads after each cycle instead of blind sched()
+//    This picks up fresh vast_urls[], poll_interval_s, and retry_on_error_s every cycle.
 function onDone(){
-  log('Cycle done - next in '+INTERVAL/1000+'s','info');
-  playing=false;idx=0;setNP('WAITING','Next in '+INTERVAL/1000+'s');updStats();sched(INTERVAL)}
+  clearWatchdog();  // prevent watchdog race
+  log('Cycle done — re-fetching /ads for next cycle','info');
+  playing=false;
+  document.getElementById('ad-container').style.display='none';
+  document.getElementById('idle-screen').style.display='flex';
+  updStats();
+  fetchSources(true, true);  // background=true (no initIMA), afterCycle=true (use poll_interval_s)
+}
 
 document.addEventListener('click',function(e){
   if(e.target.id==='btn-stats'||e.target.id==='btn-pixels')return;
   if(document.getElementById('pixel-panel').classList.contains('open'))return;
   if(!playing&&adsManager)adsManager.start()});
 
-window.addEventListener('load',function(){log('IMA: '+typeof google,'ok');fetchSources();sendHeartbeat();setInterval(sendHeartbeat,60000);});
+function updateGpsStatus(s,c){var e=document.getElementById('s-gps');if(e){e.textContent=s;e.style.color=c||'#fff';}}
+function startGPS(){
+  if(!navigator.geolocation){log('GPS: not available','warn');updateGpsStatus('NO HARDWARE','#f44');return;}
+  function onFix(pos){gpsLat=pos.coords.latitude.toFixed(6);gpsLng=pos.coords.longitude.toFixed(6);gpsAge=Date.now();var acc=pos.coords.accuracy?Math.round(pos.coords.accuracy)+'m':'?';log('GPS fix: '+gpsLat+','+gpsLng+' acc:'+acc,'ok');updateGpsStatus(gpsLat+','+gpsLng+' ('+acc+')','#0f0');}
+  function tryCoarse(){log('GPS: trying coarse location','warn');updateGpsStatus('TRYING COARSE...','#ff0');navigator.geolocation.getCurrentPosition(onFix,function(e2){log('GPS coarse failed: '+e2.message,'err');updateGpsStatus('FAILED','#f44');},{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});}
+  function onErr(err){if(err.code===1){updateGpsStatus('PERMISSION DENIED','#f44');}else{updateGpsStatus('TIMEOUT - trying coarse','#ff0');tryCoarse();}}
+  updateGpsStatus('ACQUIRING...','#ff0');
+  navigator.geolocation.watchPosition(onFix,onErr,{enableHighAccuracy:false,maximumAge:GPS_MAX_AGE_MS,timeout:30000});}
+
+
+// ── IFRAME AD LOOP (Trillboards embed) ───────────────────────────────────────
+var EMBED_URL  = 'https://screen.trillboards.com?fp='+DEVICE_ID+'&ctv=1&autoplay=1';
+var adPlaying  = false;
+var adStartedThisCycle = false;  // true if ad_started fired this cycle
+var adWatchdog = null;
+
+function showAdFrame() {
+  if(adPlaying) return;
+  adPlaying = true;
+  log('Launching Trillboards native overlay', 'info');
+  setNP('LOADING AD...', 'via Trillboards');
+  addEv('start', 'AD OVERLAY LAUNCHED', '');
+  // Call native CurbBridge to open their player as a native WebView on top
+  if(typeof CurbBridge !== 'undefined') {
+    CurbBridge.showAd();
+  } else {
+    // Fallback to iframe if native bridge not available (browser testing)
+    log('CurbBridge not available — using iframe fallback', 'warn');
+    var frame = document.getElementById('ad-frame');
+    frame.src = EMBED_URL + '&t=' + Date.now();
+    frame.style.display = 'block';
+    document.getElementById('idle-screen').style.display = 'none';
+    adWatchdog = setTimeout(function(){
+      closeAdFrame('watchdog', 0, false);
+    }, 45000);
+  }
+}
+
+// Called by MainActivity when native overlay closes
+function onAdOverlayClosed(completed) {
+  log('Native overlay closed completed='+completed, 'ok');
+  // If ad started but completion event never fired, treat as completed
+  var wasCompleted = completed || adStartedThisCycle;
+  if(adStartedThisCycle && !completed) log('Ad started but no complete event — treating as completed', 'warn');
+  adStartedThisCycle = false;
+  closeAdFrame('trillboards', 30, wasCompleted);
+}
+
+function handleOverlayLog(msg) {
+  // Ad started playing
+  if(msg.indexOf('STARTED') >= 0 || msg.indexOf('AD_STARTED') >= 0 || msg.indexOf('ad_start') >= 0) {
+    clearTimeout(adWatchdog);
+    log('Overlay: ad started detected', 'ok');
+    addEv('start', 'AD PLAYING via overlay', '');
+    setNP('PLAYING', 'Trillboards');
+    S.fills++; updStats();
+    // Set a completion watchdog for max ad duration
+    adWatchdog = setTimeout(function(){
+      log('Ad completion watchdog — closing iframe', 'warn');
+      closeAdFrame('completed', 30, true);
+    }, 60000);
+  }
+  // Waterfall exhausted — no fill, close fast
+  if(msg.indexOf('waterfallExhausted":true') >= 0 || msg.indexOf('waterfall_exhausted') >= 0) {
+    log('Overlay: waterfall exhausted — no fill', 'warn');
+    addEv('err', 'NO FILL — waterfall exhausted', '');
+    S.err++; updStats();
+    clearTimeout(adWatchdog);
+    // Close iframe quickly and retry after interval
+    setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 500);
+  }
+  // Ad complete
+  if(msg.indexOf('COMPLETE') >= 0 && msg.indexOf('Overlay') >= 0) {
+    clearTimeout(adWatchdog);
+    log('Overlay: ad complete detected', 'ok');
+    closeAdFrame('completed', 30, true);
+  }
+  // Socket disconnect after waterfall — also signals end
+  if(msg.indexOf('Socket disconnected') >= 0 && adPlaying) {
+    log('Overlay: socket disconnect — checking state', 'info');
+  }
+}
+
+function closeAdFrame(source, durationSec, completed) {
+  if(!adPlaying) return;
+  clearTimeout(adWatchdog);
+  adPlaying = false;
+  var frame = document.getElementById('ad-frame');
+  frame.style.display = 'none';
+  frame.src = '';
+  document.getElementById('idle-screen').style.display = 'flex';
+  S.fills++; S.src = source; updStats();
+  setNP('IDLE', 'Next ad in '+Math.round(INTERVAL/1000)+'s');
+  addEv('done', 'AD ENDED — '+source+' '+durationSec+'s', '');
+  log('Ad ended — '+source+' '+durationSec+'s completed:'+completed, 'ok');
+  if(cachedDur===0) cachedDur = durationSec;
+  // Send impression
+  sendImpressionWithRetry(source, durationSec, completed, 0, false);  // KV post handled inside
+  // Schedule next iframe ad cycle
+  setTimeout(showAdFrame, INTERVAL);
+}
+
+// Handle bridge events from TrillboardsBridge (MainActivity.java) or postMessage
+window.addEventListener('message', function(e) {
+  try {
+    var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    if(!data || data.type !== 'trillboards') return;
+    handleBridgeEvent(data.event, data.data || {});
+  } catch(ex) {}
+});
+
+function handleBridgeEvent(type, data) {
+  log('Bridge: '+type, 'info');
+  switch(type) {
+    case 'programmatic_started':
+    case 'ad_started':
+      clearTimeout(adWatchdog);
+      var src = data.source || data.id || 'unknown';
+      log('AD STARTED — '+src, 'ok');
+      addEv('start', 'STARTED — '+src, '');
+      setNP('PLAYING', src);
+      S.src = src; updStats();
+      adStartedThisCycle = true;
+      break;
+    case 'programmatic_ended':
+    case 'ad_ended':
+      closeAdFrame(data.source||data.id||'unknown', data.duration||30, true);
+      break;
+    case 'programmatic_no_fill':
+      S.err++; updStats();
+      log('NO FILL — '+(data.source||'?'), 'warn');
+      addEv('err', 'NO FILL — '+(data.source||'?'), '');
+      break;
+    case 'programmatic_error':
+      S.err++; updStats();
+      log('ERROR — '+(data.error||'?'), 'err');
+      break;
+  }
+}
+
+window.addEventListener('load',function(){
+  try{
+    var sc=function(k){try{return localStorage.getItem(k);}catch(e){return null;}};
+    var cv=parseFloat(sc('curb_cpm'));if(!isNaN(cv)&&cv>0){FLOOR_CPM=cv;var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+cv.toFixed(2);}
+    var iv=parseInt(sc('curb_interval'));if(!isNaN(iv)&&iv>=5)INTERVAL=iv*1000;
+    var hv=parseInt(sc('curb_hb'));if(!isNaN(hv)&&hv>=10)HB_INTERVAL_MS=hv*1000;
+    var tv=parseInt(sc('curb_timeout'));if(!isNaN(tv)&&tv>=3)WATERFALL_TIMEOUT=tv*1000;
+    var dv=sc('curb_did');if(dv&&dv.trim()){DEVICE_ID=dv.trim();HB_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/heartbeat';}
+    var sv=sc('curb_sid');if(sv&&sv.trim())SCREEN_ID=sv.trim();
+    var kv=sc('curb_key');if(kv&&kv.trim()){HB_KEY=kv.trim();API_KEY=kv.trim();}
+    var fv=parseInt(sc('curb_force'));if(!isNaN(fv))FORCED_SOURCE=fv;
+    var uv=sc('curb_hide_ui');if(uv==='1'){UI_HIDDEN=true;applyHideUI();}
+    var bv=parseInt(sc('curb_bright'));if(!isNaN(bv)){BRIGHTNESS=bv;document.body.style.filter='brightness('+bv+'%)';}
+    var tsv=sc('curb_test');if(tsv==='1')TEST_MODE=true;
+    var ffv=parseInt(sc('curb_font'));if(!isNaN(ffv)&&ffv>=8&&ffv<=18){FONT_SIZE=ffv;setFontSize(ffv);}
+    log('Settings loaded','info');
+  }catch(e){log('Settings load error: '+e.message,'warn');}
+  log('IMA: '+typeof google,'ok');
+  updServerIntervalDisplay();
+  pollConfig();
+  // Start iframe-based ad loop
+  setTimeout(showAdFrame, 2000);
+  var _hbTimer=null;
+  function reschedHeartbeat(ms){clearInterval(_hbTimer);_hbTimer=setInterval(sendHeartbeat,ms||HB_INTERVAL_MS);}
+  sendHeartbeat();
+  reschedHeartbeat();
+  startGPS();
+  setInterval(function(){log('Hourly source refresh...','info');fetchSources(true);},3600000);
+  setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
+});
 </script>
 </body>
 </html>

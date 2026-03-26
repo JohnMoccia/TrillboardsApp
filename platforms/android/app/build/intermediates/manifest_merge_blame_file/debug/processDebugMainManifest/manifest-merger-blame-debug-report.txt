@@ -27,108 +27,137 @@
 20    <uses-permission android:name="android.permission.INTERNET" />
 20-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:4:5-67
 20-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:4:22-64
-21
-22    <queries>
-22-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:16:5-20:15
-23        <intent>
-23-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:9-19:18
-24            <action android:name="android.media.action.IMAGE_CAPTURE" />
-24-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:13-73
-24-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:21-70
-25        </intent>
-26    </queries>
-27
-28    <permission
-28-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:22:5-24:47
-29        android:name="com.curb.trillboards.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-29-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:23:9-81
-30        android:protectionLevel="signature" />
-30-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:24:9-44
-31
-32    <uses-permission android:name="com.curb.trillboards.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-32-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:26:5-97
-32-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:26:22-94
-33
-34    <application
-34-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:5-15:19
-35        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-35-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:28:18-86
-36        android:debuggable="true"
-37        android:extractNativeLibs="false"
-38        android:hardwareAccelerated="true"
-38-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:18-52
-39        android:icon="@mipmap/ic_launcher"
-39-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:53-87
-40        android:label="@string/app_name"
-40-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:88-120
-41        android:supportsRtl="true" >
-41-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:121-147
-42        <activity
-42-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:9-11:20
-43            android:name="com.curb.trillboards.MainActivity"
-43-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:229-256
-44            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
-44-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:19-135
-45            android:exported="true"
-45-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:136-159
-46            android:label="@string/activity_name"
-46-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:160-197
-47            android:launchMode="singleTop"
-47-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:198-228
-48            android:theme="@style/Theme.App.SplashScreen"
-48-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:257-302
-49            android:windowSoftInputMode="adjustResize" >
-49-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:303-345
-50            <intent-filter android:label="@string/launcher_name" >
-50-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:13-10:29
-50-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:28-65
-51                <action android:name="android.intent.action.MAIN" />
-51-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:17-69
-51-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:25-66
-52
-53                <category android:name="android.intent.category.LAUNCHER" />
-53-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:17-77
-53-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:27-74
-54            </intent-filter>
-55        </activity>
-56
-57        <provider
-58            android:name="androidx.core.content.FileProvider"
-58-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:141-190
-59            android:authorities="com.curb.trillboards.cdv.core.file.provider"
-59-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:19-80
-60            android:exported="false"
-60-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:81-105
-61            android:grantUriPermissions="true" >
-61-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:106-140
-62            <meta-data
-62-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:13-130
-63                android:name="android.support.FILE_PROVIDER_PATHS"
-63-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:24-74
-64                android:resource="@xml/cdv_core_file_provider_paths" />
-64-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:75-127
-65        </provider>
-66        <provider
-66-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
-67            android:name="androidx.startup.InitializationProvider"
-67-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
-68            android:authorities="com.curb.trillboards.androidx-startup"
-68-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
-69            android:exported="false" >
-69-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
-70            <meta-data
-70-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
-71                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-71-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
-72                android:value="androidx.startup" />
-72-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
-73            <meta-data
-73-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\johnm\.gradle\caches\transforms-4\be267c37a3516875aadc94c5172ad79a\transformed\jetified-lifecycle-process-2.4.1\AndroidManifest.xml:31:13-33:52
-74                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-74-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\johnm\.gradle\caches\transforms-4\be267c37a3516875aadc94c5172ad79a\transformed\jetified-lifecycle-process-2.4.1\AndroidManifest.xml:32:17-78
-75                android:value="androidx.startup" />
-75-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\johnm\.gradle\caches\transforms-4\be267c37a3516875aadc94c5172ad79a\transformed\jetified-lifecycle-process-2.4.1\AndroidManifest.xml:33:17-49
-76        </provider>
-77    </application>
+21    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+21-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:5-81
+21-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:5:22-78
+22    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+22-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:5-79
+22-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:6:22-76
+23    <uses-permission android:name="android.permission.WAKE_LOCK" />
+23-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:5-68
+23-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:7:22-65
+24    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+24-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:5-77
+24-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:8:22-74
+25    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+25-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:5-92
+25-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:9:22-89
+26
+27    <queries>
+27-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:22:5-26:15
+28        <intent>
+28-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:23:9-25:18
+29            <action android:name="android.media.action.IMAGE_CAPTURE" />
+29-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:24:13-73
+29-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:24:21-70
+30        </intent>
+31    </queries>
+32
+33    <permission
+33-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:22:5-24:47
+34        android:name="com.curb.trillboards.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+34-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:23:9-81
+35        android:protectionLevel="signature" />
+35-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:24:9-44
+36
+37    <uses-permission android:name="com.curb.trillboards.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+37-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:26:5-97
+37-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:26:22-94
+38
+39    <application
+39-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:5-21:19
+40        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+40-->[androidx.core:core:1.9.0] C:\Users\johnm\.gradle\caches\transforms-4\935f0b2011a42b1f4580a29b15bc8c15\transformed\core-1.9.0\AndroidManifest.xml:28:18-86
+41        android:debuggable="true"
+42        android:extractNativeLibs="false"
+43        android:hardwareAccelerated="true"
+43-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:18-52
+44        android:icon="@mipmap/ic_launcher"
+44-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:53-87
+45        android:label="@string/app_name"
+45-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:88-120
+46        android:supportsRtl="true" >
+46-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:10:121-147
+47        <activity
+47-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:9-16:20
+48            android:name="com.curb.trillboards.MainActivity"
+48-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:229-256
+49            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+49-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:19-135
+50            android:exported="true"
+50-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:136-159
+51            android:label="@string/activity_name"
+51-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:160-197
+52            android:launchMode="singleTop"
+52-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:198-228
+53            android:theme="@style/Theme.App.SplashScreen"
+53-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:257-302
+54            android:windowSoftInputMode="adjustResize" >
+54-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:11:303-345
+55            <intent-filter android:label="@string/launcher_name" >
+55-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:13-15:29
+55-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:12:28-65
+56                <action android:name="android.intent.action.MAIN" />
+56-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:17-69
+56-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:13:25-66
+57
+58                <category android:name="android.intent.category.LAUNCHER" />
+58-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:14:17-77
+58-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:14:27-74
+59            </intent-filter>
+60        </activity>
+61
+62        <provider
+63            android:name="androidx.core.content.FileProvider"
+63-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:141-190
+64            android:authorities="com.curb.trillboards.cdv.core.file.provider"
+64-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:19-80
+65            android:exported="false"
+65-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:81-105
+66            android:grantUriPermissions="true" >
+66-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:17:106-140
+67            <meta-data
+67-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:13-130
+68                android:name="android.support.FILE_PROVIDER_PATHS"
+68-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:24-74
+69                android:resource="@xml/cdv_core_file_provider_paths" />
+69-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:18:75-127
+70        </provider>
+71
+72        <service
+72-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:9-169
+73            android:name="com.curb.trillboards.AdService"
+73-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:112-137
+74            android:enabled="true"
+74-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:18-40
+75            android:exported="false"
+75-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:41-65
+76            android:foregroundServiceType="mediaPlayback"
+76-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:66-111
+77            android:stopWithTask="false" />
+77-->C:\Users\johnm\Desktop\TrillboardsApp\platforms\android\app\src\main\AndroidManifest.xml:20:138-166
 78
-79</manifest>
+79        <provider
+79-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+80            android:name="androidx.startup.InitializationProvider"
+80-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
+81            android:authorities="com.curb.trillboards.androidx-startup"
+81-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
+82            android:exported="false" >
+82-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
+83            <meta-data
+83-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+84                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+84-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
+85                android:value="androidx.startup" />
+85-->[androidx.emoji2:emoji2:1.2.0] C:\Users\johnm\.gradle\caches\transforms-4\235ce041e3654214bab3d160a72ea481\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
+86            <meta-data
+86-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\johnm\.gradle\caches\transforms-4\be267c37a3516875aadc94c5172ad79a\transformed\jetified-lifecycle-process-2.4.1\AndroidManifest.xml:31:13-33:52
+87                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+87-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\johnm\.gradle\caches\transforms-4\be267c37a3516875aadc94c5172ad79a\transformed\jetified-lifecycle-process-2.4.1\AndroidManifest.xml:32:17-78
+88                android:value="androidx.startup" />
+88-->[androidx.lifecycle:lifecycle-process:2.4.1] C:\Users\johnm\.gradle\caches\transforms-4\be267c37a3516875aadc94c5172ad79a\transformed\jetified-lifecycle-process-2.4.1\AndroidManifest.xml:33:17-49
+89        </provider>
+90    </application>
+91
+92</manifest>
