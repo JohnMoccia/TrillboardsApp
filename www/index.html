@@ -264,7 +264,11 @@ var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 // 'embed'  = their native WebView overlay (current, proven)
 // 'native' = our own IMA player via earner API (full control, no their player)
 // Change via remote config: set player_mode in Cloudflare KV
-var PLAYER_MODE = 'embed'; // switched back to their player
+var PLAYER_MODE = 'native'; // native: /vast/config → IMA SDK direct from Google
+var VAST_CONFIG_URL = 'https://api.trillboards.com/v1/partner/vast/config';
+var vastConfig = null;       // cached /vast/config response
+var vastConfigTs = 0;        // when we last fetched it
+var vastConfigTTL = 3600000; // 1 hour default, overridden by cache_ttl_seconds
 var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
 var CONFIG_URL='https://trillboards-proxy.johnm-af2.workers.dev/get-config';
 var KV_SECRET='curb2026';
@@ -529,6 +533,22 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
     if(attempt<3){var delay=[2000,4000,8000][attempt]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}
     else{log('All retries exhausted — queuing: '+adid,'err');offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:ts,retries:attempt});updQueueBadge();}
   });
+}
+
+// ── sendEventToAPI — proper event tracking per Partner API spec ──────────────
+// Sends start/firstQuartile/midpoint/thirdQuartile/complete events
+function sendEventToAPI(eventType, adId, durationMs){
+  if(!isOnline) return;
+  var body = JSON.stringify({impressions:[{
+    device_id: DEVICE_ID,
+    ad_id: adId||'unknown',
+    event: eventType,
+    timestamp: new Date().toISOString(),
+    duration_ms: durationMs||0
+  }]});
+  fetch(BATCH_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},body:body})
+  .then(function(r){log('Event ['+eventType+'] → HTTP '+r.status,'ok');})
+  .catch(function(e){log('Event ['+eventType+'] FAIL: '+e.message,'warn');});
 }
 
 function addPostHistory(entry){postHistory.unshift(entry);if(postHistory.length>20)postHistory.pop();rendPostHistory();}
@@ -863,66 +883,73 @@ function startWatchdog(ms){
 }
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
 
-function fetchSources(background, afterCycle){
-  log((background?'Background':'Fetching')+' waterfall sources...','info');trackBytes('api','api',2048);
-  if(!background)setNP('FETCHING...','Calling API');
-  var adsParams='?slot_w='+window.innerWidth+'&slot_h='+window.innerHeight+'&orientation=landscape&muted=0&autoplay=1&ua='+encodeURIComponent(navigator.userAgent);
-  var fetchURL = API_URL+adsParams;
-  log('fetchSources via PARTNER API (native mode)','info');
-  var fetchHeaders = {'Authorization':'Bearer '+API_KEY};
-  fetch(fetchURL,{headers:fetchHeaders})
-  .then(function(r){return r.json()})
+// ── /vast/config fetch — cached 1hr, called once then reused ─────────────────
+function fetchVastConfig(callback) {
+  var now = Date.now();
+  if (vastConfig && (now - vastConfigTs) < vastConfigTTL) {
+    log('VAST config from cache (TTL '+ Math.round((vastConfigTTL-(now-vastConfigTs))/60000)+'min left)','info');
+    callback(vastConfig);
+    return;
+  }
+  log('Fetching /vast/config...','info');
+  trackBytes('api','api',512);
+  fetch(VAST_CONFIG_URL + '?device_id=' + DEVICE_ID + '&screen_id=' + SCREEN_ID, {
+    headers: {'Authorization': 'Bearer ' + API_KEY}
+  })
+  .then(function(r){ return r.json(); })
   .then(function(data){
-    if(data.poll_interval_s){POLL_INTERVAL_S=data.poll_interval_s;updServerIntervalDisplay();}
-    if(data.retry_on_error_s){RETRY_ON_ERROR_S=data.retry_on_error_s;updServerIntervalDisplay();}
-
-    var gotSources=false;
-    if(data.vast_urls&&data.vast_urls.length){
-      sources=data.vast_urls.map(function(url,i){return{name:'source_'+(i+1),vast_url:url,priority:i+1,timeout_ms:WATERFALL_TIMEOUT};});
-      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
-      log('Got '+sources.length+' sources from vast_urls[]'+(background?' (background)':''),'ok');
-      gotSources=true;
-    } else if(data.success&&data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
-      sources=data.data.header_bidding_settings.vast_waterfall.sources;
-      sources.sort(function(a,b){return a.priority-b.priority});
-      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
-      log('Got '+sources.length+' sources from vast_waterfall'+(background?' (background)':''),'ok');
-      gotSources=true;
-    } else if(data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
-      sources=data.data.header_bidding_settings.vast_waterfall.sources;
-      sources.sort(function(a,b){return(a.priority||99)-(b.priority||99)});
-      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
-      log('Got '+sources.length+' sources from earner API'+(background?' (background)':''),'ok');
-      gotSources=true;
-    }
-
-    if(gotSources){
+    if (data.success && data.data && data.data.vast_tag_template) {
+      vastConfig = data.data;
+      vastConfigTs = Date.now();
+      if (data.data.cache_ttl_seconds) vastConfigTTL = data.data.cache_ttl_seconds * 1000;
+      if (data.data.timeout_ms) WATERFALL_TIMEOUT = data.data.timeout_ms;
+      if (data.data.floor_price_cpm) FLOOR_CPM = data.data.floor_price_cpm / 100; // cents → dollars
+      log('VAST config OK — template: '+data.data.vast_tag_template.substring(0,60)+'...','ok');
+      var badge = document.getElementById('config-badge');
+      if(badge) badge.textContent = 'VAST: OK '+new Date().toTimeString().substring(0,8);
+      // Expose as single "source" for stats panel compatibility
+      sources = [{name:'google_gam', vast_url: data.data.vast_tag_template, priority:1, timeout_ms: data.data.timeout_ms||WATERFALL_TIMEOUT}];
+      if(!srcStats['google_gam']) srcStats['google_gam'] = {req:0,fills:0,err:0};
       rendSrc();
-      if(afterCycle){
-        idx=0;rebuildLoader();
-        setNP('WAITING','Next in '+POLL_INTERVAL_S+'s');
-        sched(POLL_INTERVAL_S*1000);
-      } else if(!background){
-        initIMA();
-      }
+      callback(vastConfig);
     } else {
-      log('No sources — retry in '+RETRY_ON_ERROR_S+'s','warn');
-      if(!background){setNP('NO SOURCES','Retrying in '+RETRY_ON_ERROR_S+'s');sched(RETRY_ON_ERROR_S*1000);}
+      log('VAST config: unexpected response — '+JSON.stringify(data).substring(0,100),'err');
+      callback(null);
     }
-  }).catch(function(e){
-    log('API error: '+e.message+' — retry in '+RETRY_ON_ERROR_S+'s','err');
-    if(!background&&!afterCycle){setNP('API ERROR',e.message);}
-    sched(RETRY_ON_ERROR_S*1000);
-  })}
+  })
+  .catch(function(e){
+    log('VAST config fetch failed: '+e.message,'err');
+    callback(null);
+  });
+}
+
+// ── fetchSources: now just a thin wrapper that refreshes VAST config ─────────
+function fetchSources(background, afterCycle){
+  log((background?'Background refresh':'Fetching')+' VAST config...','info');
+  fetchVastConfig(function(cfg){
+    if(!cfg){
+      log('No VAST config — retry in '+RETRY_ON_ERROR_S+'s','warn');
+      if(!background) { setNP('NO CONFIG','Retrying in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
+      return;
+    }
+    if(afterCycle){
+      setNP('WAITING','Next ad in '+Math.round(INTERVAL/1000)+'s');
+      sched(INTERVAL);
+    } else if(!background){
+      initIMA();
+    }
+  });
+}
 
 function initIMA(){
-  log('IMA ready','ok');
+  log('IMA init','ok');
   adDisplayContainer=new google.ima.AdDisplayContainer(adDiv,vid);
   adDisplayContainer.initialize();
   adsLoader=new google.ima.AdsLoader(adDisplayContainer);
   adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
   adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
-  idx=0;reqNext()}
+  idx=0; reqNext();
+}
 
 function rebuildLoader(){
   if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
@@ -930,104 +957,155 @@ function rebuildLoader(){
   adsLoader=new google.ima.AdsLoader(adDisplayContainer);
   adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
   adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
-  log('Loader rebuilt','info');}
+  log('Loader rebuilt','info');
+}
+
+function buildVastUrl(){
+  if(!vastConfig||!vastConfig.vast_tag_template) return null;
+  var tpl = vastConfig.vast_tag_template;
+  var w = window.innerWidth, h = window.innerHeight;
+  var cb = Date.now()+''+Math.floor(Math.random()*99999);
+  var url = tpl
+    .replace(/\{width\}/g, w)
+    .replace(/\{height\}/g, h)
+    .replace(/%%CACHEBUSTER%%/g, cb)
+    .replace(/\[CACHEBUSTER\]/g, cb);
+  // Append correlator, screen targeting, GPS if available
+  var sep = url.indexOf('?') >= 0 ? '&' : '?';
+  url += sep + 'correlator=' + cb + '&ppid=' + SCREEN_ID + '&description_url=' + encodeURIComponent('https://screen.trillboards.com');
+  if(gpsLat && gpsLng) url += '&lat=' + gpsLat + '&long=' + gpsLng;
+  return url;
+}
 
 function reqNext(){
-  clearTimeout(nextTimer);cdown=null;st('s-next','-');
-  correlator=Date.now();
-  var hour=new Date().getHours();
-  if(idx>=sources.length){
-    fillHistory.push(0);fillByHour[hour].reqs++;
-    log('All exhausted — retry in '+INTERVAL/1000+'s','warn');
-    setNP('NO FILL','All sources failed — retry in '+INTERVAL/1000+'s');
-    idx=0;rebuildLoader();updStats();sched(INTERVAL);return}
-  if(idx===0){
-    var nowMin=Math.floor(Date.now()/60000);
-    if(nowMin!==lastCycleMinute){lastCycleMinute=nowMin;cyclesThisMinute=0;}
-    if(cyclesThisMinute>=MAX_PER_MIN){log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn');sched(INTERVAL);return;}
-    cyclesThisMinute++;S.req++;updStats();
+  clearTimeout(nextTimer); cdown=null; st('s-next','-');
+  correlator = Date.now();
+  var hour = new Date().getHours();
+
+  // Rate cap
+  var nowMin = Math.floor(Date.now()/60000);
+  if(nowMin !== lastCycleMinute){ lastCycleMinute=nowMin; cyclesThisMinute=0; }
+  if(cyclesThisMinute >= MAX_PER_MIN){ log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn'); sched(INTERVAL); return; }
+  cyclesThisMinute++; S.req++; updStats();
+
+  // If VAST config expired, refresh it first
+  if(!vastConfig || (Date.now()-vastConfigTs) >= vastConfigTTL){
+    log('VAST config stale — refreshing before request','info');
+    fetchVastConfig(function(cfg){
+      if(cfg){ reqNext(); }
+      else { log('VAST config unavailable — retry in '+RETRY_ON_ERROR_S+'s','err'); setNP('NO CONFIG','Retry in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
+    });
+    return;
   }
-  var s=sources[idx];
-  log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
-  srcStats[s.name].req++;
-  var req=new google.ima.AdsRequest();
-  var sep=s.vast_url.indexOf('?')>=0?'&':'?';
-  var geoStr=(gpsLat&&gpsLng)?'&lat='+gpsLat+'&long='+gpsLng+'&venuetype=4':'';
-  req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,correlator)+sep+'correlator='+correlator+'&ppid='+SCREEN_ID+geoStr;
-  req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
-  req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
-  var cb=Date.now()+''+Math.floor(Math.random()*99999);
-  req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,cb);
-  try{adsLoader.requestAds(req);startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT);}catch(e){log('Threw: '+s.name+' '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
+
+  var vastUrl = buildVastUrl();
+  if(!vastUrl){ log('Could not build VAST URL','err'); sched(RETRY_ON_ERROR_S*1000); return; }
+
+  var s = sources[0] || {name:'google_gam', timeout_ms: WATERFALL_TIMEOUT};
+  log('Requesting: '+s.name,'info');
+  setNP('REQUESTING...', 'Google GAM via Trillboards');
+  if(srcStats[s.name]) srcStats[s.name].req++;
+
+  var req = new google.ima.AdsRequest();
+  req.adTagUrl = vastUrl;
+  req.linearAdSlotWidth = req.nonLinearAdSlotWidth = window.innerWidth;
+  req.linearAdSlotHeight = req.nonLinearAdSlotHeight = window.innerHeight;
+
+  fillByHour[hour].reqs++;
+  try{ adsLoader.requestAds(req); startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT); }
+  catch(e){ log('IMA request threw: '+e.message,'err'); S.err++; rebuildLoader(); sched(RETRY_ON_ERROR_S*1000); }
+}
 
 function onLoaded(event){
-  var s=sources[idx];log('Manager loaded: '+s.name,'ok');
+  var s=sources[0]||{name:'google_gam'};
+  log('Manager loaded: '+s.name,'ok');
   if(adsManager){try{adsManager.destroy()}catch(e){}}
   adsManager=event.getAdsManager(vid);
   adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
   adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED,onDone,false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';setNP('LOADED: GOOGLE GAM',((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
     cachedAdId='';cachedAid='';cachedDur=0;cacheAdInfo(ad);
     var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';var dur=cachedDur?cachedDur+'s':'?s';var hour=new Date().getHours();
     log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
-    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;fillByHour[hour].reqs++;
+    if(srcStats[s.name]){srcStats[s.name].fills++;}S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;
     clearWatchdog();playing=true;adT0=Date.now();if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
     document.getElementById('ad-container').style.display='block';
     document.getElementById('idle-screen').style.display='none';
-    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);},false);
+    setNP('PLAYING: GOOGLE GAM',adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);
+    // Send start event per API spec
+    sendEventToAPI('start', cachedAdId||'unknown', cachedDur||0);
+  },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
     S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);
     sendImpressionWithRetry(cachedAdId||'unknown',cachedDur||0,false,0,false);},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);addEv('q','75% - '+s.name,'');},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){
+    addEv('q','25% - '+s.name,'');
+    sendEventToAPI('firstQuartile', cachedAdId||'unknown', cachedDur||0);
+  },false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){
+    addEv('q','50% - '+s.name,'');
+    sendEventToAPI('midpoint', cachedAdId||'unknown', cachedDur||0);
+  },false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);
+    addEv('q','75% - '+s.name,'');
+    sendEventToAPI('thirdQuartile', cachedAdId||'unknown', cachedDur||0);
+  },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     try{var ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);}catch(e){}
     if(!cachedAdId||cachedAdId==='unknown'){log('COMPLETE — ad ID still unknown, sending with cached: '+cachedAdId,'warn');}
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p+' - adid:'+cachedAdId,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
     S.done++;updStats();
+    sendEventToAPI('complete', cachedAdId||'unknown', cachedDur||0);
     resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     rs.mimeTypes=['video/mp4','video/webm','video/3gpp','application/javascript'];
-    rs.loadVideoTimeout=15000;
+    rs.loadVideoTimeout=WATERFALL_TIMEOUT||15000;
     rs.enablePreloading=true;
     adsManager.updateAdsRenderingSettings(rs);
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
     setTimeout(function(){var style=document.createElement('style');style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}.ima-controls-div{display:none!important;}.ima-mute-button{display:none!important;}.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';document.head.appendChild(style);},500);
     idx=0;
-  }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
+  }catch(e){log('Start err: '+e.message,'err');if(srcStats[s.name])srcStats[s.name].err++;S.err++;rebuildLoader();sched(RETRY_ON_ERROR_S*1000);}}
 
 function onErr(event){
-  clearWatchdog();var s=sources[idx];
+  clearWatchdog();
+  var s=sources[0]||{name:'google_gam'};
   var er=event.getError?event.getError().toString():'unknown';
   var erCode=event.getError&&event.getError().getErrorCode?event.getError().getErrorCode():0;
   var noFill=(erCode===303||erCode===1205||er.indexOf('empty')>=0||er.indexOf('no ad')>=0||er.indexOf('VAST_EMPTY')>=0);
-  log((noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+' ['+erCode+'] - '+er.substring(0,60),'err');
-  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+(noFill?' (empty VAST)':' ('+erCode+')'),'');
-  if(s){srcStats[s.name].err++;S.err++}
+  log((noFill?'NO FILL':'IMA ERROR')+' - '+s.name+' ['+erCode+'] - '+er.substring(0,60),'err');
+  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+s.name+(noFill?' (empty VAST)':' ('+erCode+')'),'');
+  if(srcStats[s.name]){srcStats[s.name].err++;}
+  S.err++;fillHistory.push(0);
   playing=false;
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
-  if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
-  rebuildLoader();idx++;updStats();
-  setTimeout(reqNext,500);
+  if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null;}
+  rebuildLoader();updStats();
+  // On no-fill, invalidate VAST config cache so we get a fresh template next cycle
+  if(noFill){ vastConfigTs=0; log('Invalidated VAST config cache for next cycle','info'); }
+  setNP('NO FILL','Retry in '+Math.round(INTERVAL/1000)+'s');
+  sched(INTERVAL);
 }
 
 function onDone(){
   clearWatchdog();
-  log('Cycle done','info');
+  log('Ad cycle complete','info');
   playing=false;
   adPlaying=false;
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   updStats();
-  fetchSources(true, true);
+  setNP('IDLE','Next ad in '+Math.round(INTERVAL/1000)+'s');
+  rebuildLoader();
+  sched(INTERVAL);
 }
 
 document.addEventListener('click',function(e){
@@ -1053,8 +1131,8 @@ var adWatchdog = null;
 
 function showAdFrame() {
   if(PLAYER_MODE === 'native') {
-    log('Native player mode — fetching earner sources', 'info');
-    setNP('FETCHING...', 'Earner API');
+    log('Native player mode — fetching VAST config', 'info');
+    setNP('FETCHING...', '/vast/config → Google GAM');
     fetchSources(false, false);
     return;
   }
@@ -1200,7 +1278,7 @@ window.addEventListener('load',function(){
   sendHeartbeat();
   reschedHeartbeat();
   startGPS();
-  setInterval(function(){log('Hourly source refresh...','info');fetchSources(true);},3600000);
+  setInterval(function(){log('Hourly VAST config refresh...','info');vastConfigTs=0;fetchSources(true);},3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
 });
 </script>
