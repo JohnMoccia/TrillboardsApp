@@ -201,6 +201,7 @@
 <div id="stats-panel">
   <div class="ptitle">CURB AD MONITOR</div>
   <div class="uptime" id="uptime">UP: 00:00:00</div>
+    <div id="player-mode-badge" style="text-align:right;font-size:10px;color:#0f0;margin-bottom:4px">MODE: NATIVE</div>
   <div id="now-playing"><div class="nps" id="nps">INITIALIZING...</div><div class="npd" id="npd">Starting up</div></div>
   <div class="sec"><div class="sec-t">Session Stats</div>
     <div class="sr"><span class="sl">Total Requests</span><span class="sv" id="s-req">0</span></div>
@@ -255,7 +256,14 @@
 var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
 var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
+var EARNER_URL='https://api.trillboards.com/v2/earner/alot-advertisement-list/'+SCREEN_ID; // earner waterfall
 var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
+
+// ── PLAYER MODE FLAG ─────────────────────────────────────────────────────────
+// 'embed'  = their native WebView overlay (current, proven)
+// 'native' = our own IMA player via earner API (full control, no their player)
+// Change via remote config: set player_mode in Cloudflare KV
+var PLAYER_MODE = 'native'; // switch here or via remote config
 var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
 var CONFIG_URL='https://trillboards-proxy.johnm-af2.workers.dev/get-config';
 var KV_SECRET='curb2026';
@@ -299,6 +307,13 @@ var configPollTimer = null;
 var lastConfigTs = null;
 
 function applyRemoteConfig(cfg) {
+  // Player mode can be switched remotely
+  if(cfg.player_mode==='embed'||cfg.player_mode==='native'){
+    PLAYER_MODE=cfg.player_mode;
+    log('Player mode: '+PLAYER_MODE,'ok');
+    var badge=document.getElementById('player-mode-badge');
+    if(badge){badge.textContent='MODE: '+PLAYER_MODE.toUpperCase();badge.style.color=PLAYER_MODE==='native'?'#0f0':'#4af';}
+  }
   if (!cfg) return;
   REMOTE_CONFIG = cfg;
   if (cfg.floor_cpm != null && !isNaN(cfg.floor_cpm)) {
@@ -853,7 +868,10 @@ function fetchSources(background, afterCycle){
   log((background?'Background':'Fetching')+' waterfall sources...','info');trackBytes('api','api',2048);
   if(!background)setNP('FETCHING...','Calling API');
   var adsParams='?slot_w='+window.innerWidth+'&slot_h='+window.innerHeight+'&orientation=landscape&muted=0&autoplay=1&ua='+encodeURIComponent(navigator.userAgent);
-  fetch(API_URL+adsParams,{headers:{'Authorization':'Bearer '+API_KEY}})
+  // In native mode use earner API — same demand pool as their embed
+  var fetchURL = (PLAYER_MODE==='native') ? EARNER_URL : (API_URL+adsParams);
+  log('fetchSources via '+(PLAYER_MODE==='native'?'EARNER':'PARTNER')+' API','info');
+  fetch(fetchURL,{headers:{'Authorization':'Bearer '+API_KEY}})
   .then(function(r){return r.json()})
   .then(function(data){
     // NEW: pick up server-controlled timing fields
@@ -868,10 +886,18 @@ function fetchSources(background, afterCycle){
       log('Got '+sources.length+' sources from vast_urls[]'+(background?' (background)':''),'ok');
       gotSources=true;
     } else if(data.success&&data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
+      // Partner API format
       sources=data.data.header_bidding_settings.vast_waterfall.sources;
       sources.sort(function(a,b){return a.priority-b.priority});
       sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
       log('Got '+sources.length+' sources from vast_waterfall'+(background?' (background)':''),'ok');
+      gotSources=true;
+    } else if(data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
+      // Earner API format (same structure, different wrapper)
+      sources=data.data.header_bidding_settings.vast_waterfall.sources;
+      sources.sort(function(a,b){return(a.priority||99)-(b.priority||99)});
+      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
+      log('Got '+sources.length+' sources from earner API'+(background?' (background)':''),'ok');
       gotSources=true;
     }
 
@@ -1003,12 +1029,18 @@ function onErr(event){
 //    This picks up fresh vast_urls[], poll_interval_s, and retry_on_error_s every cycle.
 function onDone(){
   clearWatchdog();  // prevent watchdog race
-  log('Cycle done — re-fetching /ads for next cycle','info');
+  log('Cycle done','info');
   playing=false;
+  adPlaying=false;
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   updStats();
-  fetchSources(true, true);  // background=true (no initIMA), afterCycle=true (use poll_interval_s)
+  if(PLAYER_MODE==='native'){
+    // In native mode re-fetch earner sources for next cycle
+    sched(INTERVAL);
+  } else {
+    fetchSources(true, true);
+  }
 }
 
 document.addEventListener('click',function(e){
@@ -1034,15 +1066,24 @@ var adWatchdog = null;
 
 function showAdFrame() {
   if(adPlaying) return;
+
+  if(PLAYER_MODE === 'native') {
+    // ── NATIVE MODE: our own IMA player via earner API ──────────────────────
+    log('Native player mode — fetching earner sources', 'info');
+    setNP('FETCHING...', 'Earner API');
+    adPlaying = true;
+    fetchSources(false, false);
+    return;
+  }
+
+  // ── EMBED MODE: their native WebView overlay ─────────────────────────────
   adPlaying = true;
-  log('Launching Trillboards native overlay', 'info');
-  setNP('LOADING AD...', 'via Trillboards');
+  log('Launching Trillboards embed overlay', 'info');
+  setNP('LOADING AD...', 'via Trillboards embed');
   addEv('start', 'AD OVERLAY LAUNCHED', '');
-  // Call native CurbBridge to open their player as a native WebView on top
   if(typeof CurbBridge !== 'undefined') {
     CurbBridge.showAd();
   } else {
-    // Fallback to iframe if native bridge not available (browser testing)
     log('CurbBridge not available — using iframe fallback', 'warn');
     var frame = document.getElementById('ad-frame');
     frame.src = EMBED_URL + '&t=' + Date.now();
@@ -1157,6 +1198,8 @@ function handleBridgeEvent(type, data) {
 }
 
 window.addEventListener('load',function(){
+  var badge=document.getElementById('player-mode-badge');
+  if(badge){badge.textContent='MODE: '+PLAYER_MODE.toUpperCase();badge.style.color=PLAYER_MODE==='native'?'#0f0':'#4af';}
   try{
     var sc=function(k){try{return localStorage.getItem(k);}catch(e){return null;}};
     var cv=parseFloat(sc('curb_cpm'));if(!isNaN(cv)&&cv>0){FLOOR_CPM=cv;var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+cv.toFixed(2);}
