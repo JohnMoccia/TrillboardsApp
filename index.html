@@ -904,7 +904,7 @@ function fetchVastConfig(callback) {
       if (data.data.cache_ttl_seconds) vastConfigTTL = data.data.cache_ttl_seconds * 1000;
       if (data.data.timeout_ms) WATERFALL_TIMEOUT = data.data.timeout_ms;
       if (data.data.floor_price_cpm) FLOOR_CPM = data.data.floor_price_cpm / 100; // cents → dollars
-      log('VAST config OK — template: '+data.data.vast_tag_template.substring(0,60)+'...','ok');
+      log('VAST config OK — template: '+data.data.vast_tag_template.substring(0,500),'ok');
       var badge = document.getElementById('config-badge');
       if(badge) badge.textContent = 'VAST: OK '+new Date().toTimeString().substring(0,8);
       // Expose as single "source" for stats panel compatibility
@@ -974,6 +974,7 @@ function buildVastUrl(){
   var sep = url.indexOf('?') >= 0 ? '&' : '?';
   url += sep + 'correlator=' + cb + '&ppid=' + SCREEN_ID + '&description_url=' + encodeURIComponent('https://screen.trillboards.com');
   if(gpsLat && gpsLng) url += '&lat=' + gpsLat + '&long=' + gpsLng;
+  log('VAST URL built: '+url,'info');
   return url;
 }
 
