@@ -265,7 +265,7 @@ var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 // 'embed'  = their native WebView overlay (current, proven)
 // 'native' = our own IMA player via earner API (full control, no their player)
 // Change via remote config: set player_mode in Cloudflare KV
-var PLAYER_MODE = 'native'; // native: /vast/config → IMA SDK direct from Google
+var PLAYER_MODE = 'embed'; // their WebView overlay via CurbBridge
 var VAST_CONFIG_URL = 'https://api.trillboards.com/v1/partner/vast/config';
 var vastConfig = null;       // cached /vast/config response
 var vastConfigTs = 0;        // when we last fetched it
