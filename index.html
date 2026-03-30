@@ -256,7 +256,8 @@
 var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
 var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
-var EARNER_URL='https://api.trillboards.com/v2/earner/alot-advertisement-list/'+SCREEN_ID; // earner waterfall
+// Earner API routed through our Cloudflare Worker to avoid CORS
+// Worker proxies /earner/* → api.trillboards.com/v2/earner/* with proper auth
 var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 
 // ── PLAYER MODE FLAG ─────────────────────────────────────────────────────────
@@ -286,6 +287,7 @@ var S_hbOk=0,S_hbFail=0;
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
 var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
+var EARNER_URL='https://trillboards-proxy.johnm-af2.workers.dev/earner/alot-advertisement-list/'+SCREEN_ID; // routes through Worker to avoid CORS
 var cpmLog=[],fillHistory=[],postHistory=[];
 var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
 
@@ -871,7 +873,9 @@ function fetchSources(background, afterCycle){
   // In native mode use earner API — same demand pool as their embed
   var fetchURL = (PLAYER_MODE==='native') ? EARNER_URL : (API_URL+adsParams);
   log('fetchSources via '+(PLAYER_MODE==='native'?'EARNER':'PARTNER')+' API','info');
-  fetch(fetchURL,{headers:{'Authorization':'Bearer '+API_KEY}})
+  var fetchHeaders = {'Authorization':'Bearer '+API_KEY};
+  if(PLAYER_MODE==='native') fetchHeaders['X-Proxy-Secret'] = KV_SECRET; // Worker needs secret
+  fetch(fetchURL,{headers:fetchHeaders})
   .then(function(r){return r.json()})
   .then(function(data){
     // NEW: pick up server-controlled timing fields
@@ -998,7 +1002,16 @@ function onLoaded(event){
     if(!cachedAdId||cachedAdId==='unknown'){log('COMPLETE — ad ID still unknown, sending with cached: '+cachedAdId,'warn');}
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p+' - adid:'+cachedAdId,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;updStats();resolveAdAndSend(true,10);correlator=Date.now();},false);
+    S.done++;updStats();
+    // In native mode mark completed in KV immediately, then also send batch proof
+    if(PLAYER_MODE==='native'){
+      var compTotals=loadTodayTotals();
+      compTotals.completed++;
+      saveTodayTotals(compTotals.count,compTotals.completed);
+      flushKVBuffer(compTotals);
+      log('Native COMPLETE — KV completed: '+compTotals.completed,'ok');
+    }
+    resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     rs.mimeTypes=['video/mp4','video/webm','video/3gpp','application/javascript'];
@@ -1023,7 +1036,15 @@ function onErr(event){
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
-  rebuildLoader();idx++;updStats();setTimeout(reqNext,500)}
+  rebuildLoader();idx++;updStats();
+  // If all sources exhausted in native mode, wait and restart full cycle
+  if(PLAYER_MODE==='native'&&idx>=sources.length){
+    log('All sources exhausted — restarting in '+(INTERVAL/1000)+'s','warn');
+    idx=0;clearTimeout(nextTimer);nextTimer=setTimeout(showAdFrame,INTERVAL);
+  } else {
+    setTimeout(reqNext,500);
+  }
+}
 
 // ── MODIFIED: onDone now re-fetches /ads after each cycle instead of blind sched()
 //    This picks up fresh vast_urls[], poll_interval_s, and retry_on_error_s every cycle.
@@ -1036,8 +1057,10 @@ function onDone(){
   document.getElementById('idle-screen').style.display='flex';
   updStats();
   if(PLAYER_MODE==='native'){
-    // In native mode re-fetch earner sources for next cycle
-    sched(INTERVAL);
+    // In native mode wait INTERVAL then call showAdFrame for next cycle
+    log('Native cycle done — next in '+(INTERVAL/1000)+'s','info');
+    clearTimeout(nextTimer);
+    nextTimer = setTimeout(showAdFrame, INTERVAL);
   } else {
     fetchSources(true, true);
   }
@@ -1065,16 +1088,21 @@ var adStartedThisCycle = false;  // true if ad_started fired this cycle
 var adWatchdog = null;
 
 function showAdFrame() {
-  if(adPlaying) return;
-
   if(PLAYER_MODE === 'native') {
     // ── NATIVE MODE: our own IMA player via earner API ──────────────────────
+    // adPlaying guard is handled inside IMA loop — don't block here
     log('Native player mode — fetching earner sources', 'info');
     setNP('FETCHING...', 'Earner API');
-    adPlaying = true;
+    // Log this as a request in KV
+    var nativeTotals = loadTodayTotals();
+    nativeTotals.count++;
+    saveTodayTotals(nativeTotals.count, nativeTotals.completed);
+    flushKVBuffer(nativeTotals);
     fetchSources(false, false);
     return;
   }
+
+  if(adPlaying) return;
 
   // ── EMBED MODE: their native WebView overlay ─────────────────────────────
   adPlaying = true;
