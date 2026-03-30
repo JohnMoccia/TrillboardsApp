@@ -186,6 +186,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="color:#fff;font-size:12px">Test Mode</div><div style="color:#444;font-size:10px">Logs extra debug info</div></div><button id="set-test-btn" onclick="toggleTestMode()" style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">OFF</button></div>
       <button onclick="clearStats()" style="width:100%;background:#1a0000;border:1px solid #3a0000;color:#f44;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-bottom:8px">CLEAR SESSION STATS</button>
       <button onclick="reloadSources()" style="width:100%;background:#001a00;border:1px solid #003a00;color:#0f0;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">RELOAD WATERFALL SOURCES</button>
+      <button onclick="resetTodayKV()" style="width:100%;background:#1a001a;border:1px solid #3a003a;color:#f0f;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-top:6px">RESET TODAY KV COUNTERS</button>
     </div>
     <div id="set-saved" style="display:none;text-align:center;color:#0f0;font-size:12px;padding:8px;background:#001500;border-radius:4px;margin-bottom:12px">Settings saved!</div>
     <button onclick="toggleSettings()" style="width:100%;background:#1a1a1a;border:1px solid #333;color:#555;padding:10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">CLOSE</button>
@@ -429,12 +430,23 @@ function logToKV(adid, durationSec, completed, impressionId) {
   if (REMOTE_CONFIG.kv_enabled === false) return;
   kvCount++;
   if(completed) kvCompleted++;
-  // Update persistent daily totals
+  // Only increment completed here — requests are counted at cycle start via incKVRequest()
+  var totals = loadTodayTotals();
+  if(completed) {
+    totals.completed++;
+    saveTodayTotals(totals.count, totals.completed);
+    log('KV completed: '+totals.completed+' / requests: '+totals.count, 'info');
+    flushKVBuffer(totals);
+  }
+}
+
+// Call once per ad cycle start (request fired)
+function incKVRequest() {
+  if (REMOTE_CONFIG.kv_enabled === false) return;
   var totals = loadTodayTotals();
   totals.count++;
-  if(completed) totals.completed++;
   saveTodayTotals(totals.count, totals.completed);
-  log('KV today total: '+totals.count+' ('+totals.completed+' completed) | session: '+kvCount, 'info');
+  log('KV request #'+totals.count+' ('+totals.completed+' completed)', 'info');
   flushKVBuffer(totals);
 }
 
@@ -857,6 +869,16 @@ function applyHideUI(){
 function setFontSize(val){FONT_SIZE=parseInt(val);try{localStorage.setItem('curb_font',val);}catch(e){}['stats-panel','pixel-panel'].forEach(function(id){var p=document.getElementById(id);if(p)p.style.fontSize=val+'px';});var fv=document.getElementById('set-font-val');if(fv)fv.textContent=val;}
 function setBrightness(val){BRIGHTNESS=parseInt(val);try{localStorage.setItem('curb_bright',val);}catch(e){}document.body.style.filter='brightness('+val+'%)';var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=val;}
 function toggleTestMode(){TEST_MODE=!TEST_MODE;try{localStorage.setItem('curb_test',TEST_MODE?'1':'0');}catch(e){}var btn=document.getElementById('set-test-btn');if(btn){btn.textContent=TEST_MODE?'ON':'OFF';btn.style.color=TEST_MODE?'#0f0':'#aaa';}log('Test mode '+(TEST_MODE?'ON':'OFF'),'ok');}
+function resetTodayKV(){
+  try{
+    var key=getTodayKey();
+    localStorage.setItem(key,JSON.stringify({count:0,completed:0}));
+    kvCount=0;kvCompleted=0;
+    flushKVBuffer({count:0,completed:0});
+    log('Today KV counters reset to 0','ok');
+    flashSaved();
+  }catch(e){log('KV reset error: '+e.message,'err');}
+}
 function clearStats(){S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};srcStats={};pixEv=[];pixDest={};logs=[];cpmLog=[];fillHistory=[];postHistory=[];offlineQueue=[];for(var i=0;i<24;i++)fillByHour[i]={fills:0,reqs:0};updStats();rendEv();rendLog();rendLF();rendCpmLog();rendPostHistory();log('Stats cleared','ok');flashSaved();}
 function reloadSources(){toggleSettings();log('Reloading waterfall sources...','info');fetchSources(false);}
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
@@ -988,6 +1010,7 @@ function reqNext(){
   if(nowMin !== lastCycleMinute){ lastCycleMinute=nowMin; cyclesThisMinute=0; }
   if(cyclesThisMinute >= MAX_PER_MIN){ log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn'); sched(INTERVAL); return; }
   cyclesThisMinute++; S.req++; updStats();
+  incKVRequest(); // count this cycle as a request
 
   // If VAST config expired, refresh it first
   if(!vastConfig || (Date.now()-vastConfigTs) >= vastConfigTTL){
@@ -1145,6 +1168,7 @@ function showAdFrame() {
   log('Launching Trillboards embed overlay', 'info');
   setNP('LOADING AD...', 'via Trillboards embed');
   addEv('start', 'AD OVERLAY LAUNCHED', '');
+  incKVRequest(); // count this as a request
   if(typeof CurbBridge !== 'undefined') {
     CurbBridge.showAd();
   } else {
