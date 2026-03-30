@@ -870,11 +870,11 @@ function fetchSources(background, afterCycle){
   log((background?'Background':'Fetching')+' waterfall sources...','info');trackBytes('api','api',2048);
   if(!background)setNP('FETCHING...','Calling API');
   var adsParams='?slot_w='+window.innerWidth+'&slot_h='+window.innerHeight+'&orientation=landscape&muted=0&autoplay=1&ua='+encodeURIComponent(navigator.userAgent);
-  // In native mode use earner API — same demand pool as their embed
-  var fetchURL = (PLAYER_MODE==='native') ? EARNER_URL : (API_URL+adsParams);
-  log('fetchSources via '+(PLAYER_MODE==='native'?'EARNER':'PARTNER')+' API','info');
+  // Both native and embed modes use partner API for waterfall sources
+  // Earner API requires email/password JWT — partner key works for both
+  var fetchURL = API_URL+adsParams;
+  log('fetchSources via PARTNER API ('+PLAYER_MODE+' mode)','info');
   var fetchHeaders = {'Authorization':'Bearer '+API_KEY};
-  if(PLAYER_MODE==='native') fetchHeaders['X-Proxy-Secret'] = KV_SECRET; // Worker needs secret
   fetch(fetchURL,{headers:fetchHeaders})
   .then(function(r){return r.json()})
   .then(function(data){
@@ -957,7 +957,13 @@ function reqNext(){
     if(nowMin!==lastCycleMinute){lastCycleMinute=nowMin;cyclesThisMinute=0;}
     if(cyclesThisMinute>=MAX_PER_MIN){log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn');sched(INTERVAL);return;}
     cyclesThisMinute++;S.req++;updStats();
-    if(REMOTE_CONFIG.kv_enabled!==false){fetch(KV_URL,{method:'POST',headers:{'X-Proxy-Secret':KV_SECRET,'Content-Type':'application/json'},body:JSON.stringify({type:'request',ad_id:'',screen_id:SCREEN_ID,device_id:DEVICE_ID,duration_ms:0,completed:false,impression_id:''})}).catch(function(){});}
+    // In native mode: count every cycle start as a request in KV
+    if(PLAYER_MODE==='native'){
+      var reqTotals=loadTodayTotals();
+      reqTotals.count++;
+      saveTodayTotals(reqTotals.count,reqTotals.completed);
+      flushKVBuffer(reqTotals);
+    }
   }
   var s=sources[idx];
   log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
@@ -1093,11 +1099,6 @@ function showAdFrame() {
     // adPlaying guard is handled inside IMA loop — don't block here
     log('Native player mode — fetching earner sources', 'info');
     setNP('FETCHING...', 'Earner API');
-    // Log this as a request in KV
-    var nativeTotals = loadTodayTotals();
-    nativeTotals.count++;
-    saveTodayTotals(nativeTotals.count, nativeTotals.completed);
-    flushKVBuffer(nativeTotals);
     fetchSources(false, false);
     return;
   }
