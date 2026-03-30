@@ -264,7 +264,7 @@ var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 // 'embed'  = their native WebView overlay (current, proven)
 // 'native' = our own IMA player via earner API (full control, no their player)
 // Change via remote config: set player_mode in Cloudflare KV
-var PLAYER_MODE = 'native'; // switch here or via remote config
+var PLAYER_MODE = 'embed'; // switched back to their player
 var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
 var CONFIG_URL='https://trillboards-proxy.johnm-af2.workers.dev/get-config';
 var KV_SECRET='curb2026';
@@ -863,26 +863,19 @@ function startWatchdog(ms){
 }
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
 
-// ── MODIFIED: fetchSources now picks up poll_interval_s, retry_on_error_s,
-//    and vast_urls[] from the /ads response. Error path uses RETRY_ON_ERROR_S.
-//    afterCycle=true means IMA is already inited — skip initIMA(), go to reqNext().
 function fetchSources(background, afterCycle){
   log((background?'Background':'Fetching')+' waterfall sources...','info');trackBytes('api','api',2048);
   if(!background)setNP('FETCHING...','Calling API');
   var adsParams='?slot_w='+window.innerWidth+'&slot_h='+window.innerHeight+'&orientation=landscape&muted=0&autoplay=1&ua='+encodeURIComponent(navigator.userAgent);
-  // Both native and embed modes use partner API for waterfall sources
-  // Earner API requires email/password JWT — partner key works for both
   var fetchURL = API_URL+adsParams;
-  log('fetchSources via PARTNER API ('+PLAYER_MODE+' mode)','info');
+  log('fetchSources via PARTNER API (native mode)','info');
   var fetchHeaders = {'Authorization':'Bearer '+API_KEY};
   fetch(fetchURL,{headers:fetchHeaders})
   .then(function(r){return r.json()})
   .then(function(data){
-    // NEW: pick up server-controlled timing fields
     if(data.poll_interval_s){POLL_INTERVAL_S=data.poll_interval_s;updServerIntervalDisplay();}
     if(data.retry_on_error_s){RETRY_ON_ERROR_S=data.retry_on_error_s;updServerIntervalDisplay();}
 
-    // NEW: support vast_urls[] array in addition to existing vast_waterfall structure
     var gotSources=false;
     if(data.vast_urls&&data.vast_urls.length){
       sources=data.vast_urls.map(function(url,i){return{name:'source_'+(i+1),vast_url:url,priority:i+1,timeout_ms:WATERFALL_TIMEOUT};});
@@ -890,14 +883,12 @@ function fetchSources(background, afterCycle){
       log('Got '+sources.length+' sources from vast_urls[]'+(background?' (background)':''),'ok');
       gotSources=true;
     } else if(data.success&&data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
-      // Partner API format
       sources=data.data.header_bidding_settings.vast_waterfall.sources;
       sources.sort(function(a,b){return a.priority-b.priority});
       sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
       log('Got '+sources.length+' sources from vast_waterfall'+(background?' (background)':''),'ok');
       gotSources=true;
     } else if(data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
-      // Earner API format (same structure, different wrapper)
       sources=data.data.header_bidding_settings.vast_waterfall.sources;
       sources.sort(function(a,b){return(a.priority||99)-(b.priority||99)});
       sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
@@ -908,7 +899,6 @@ function fetchSources(background, afterCycle){
     if(gotSources){
       rendSrc();
       if(afterCycle){
-        // IMA already inited — just reset index and go
         idx=0;rebuildLoader();
         setNP('WAITING','Next in '+POLL_INTERVAL_S+'s');
         sched(POLL_INTERVAL_S*1000);
@@ -920,10 +910,9 @@ function fetchSources(background, afterCycle){
       if(!background){setNP('NO SOURCES','Retrying in '+RETRY_ON_ERROR_S+'s');sched(RETRY_ON_ERROR_S*1000);}
     }
   }).catch(function(e){
-    // NEW: use RETRY_ON_ERROR_S instead of hardcoded 30000
     log('API error: '+e.message+' — retry in '+RETRY_ON_ERROR_S+'s','err');
-    if(!background&&!afterCycle){setNP('API ERROR',e.message);} 
-    sched(RETRY_ON_ERROR_S*1000);  // always re-arm, never die
+    if(!background&&!afterCycle){setNP('API ERROR',e.message);}
+    sched(RETRY_ON_ERROR_S*1000);
   })}
 
 function initIMA(){
@@ -945,7 +934,7 @@ function rebuildLoader(){
 
 function reqNext(){
   clearTimeout(nextTimer);cdown=null;st('s-next','-');
-  correlator=Date.now();  // fresh correlator every request
+  correlator=Date.now();
   var hour=new Date().getHours();
   if(idx>=sources.length){
     fillHistory.push(0);fillByHour[hour].reqs++;
@@ -957,13 +946,6 @@ function reqNext(){
     if(nowMin!==lastCycleMinute){lastCycleMinute=nowMin;cyclesThisMinute=0;}
     if(cyclesThisMinute>=MAX_PER_MIN){log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn');sched(INTERVAL);return;}
     cyclesThisMinute++;S.req++;updStats();
-    // In native mode: count every cycle start as a request in KV
-    if(PLAYER_MODE==='native'){
-      var reqTotals=loadTodayTotals();
-      reqTotals.count++;
-      saveTodayTotals(reqTotals.count,reqTotals.completed);
-      flushKVBuffer(reqTotals);
-    }
   }
   var s=sources[idx];
   log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
@@ -974,9 +956,8 @@ function reqNext(){
   req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,correlator)+sep+'correlator='+correlator+'&ppid='+SCREEN_ID+geoStr;
   req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
   req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
-  var cb=Date.now()+''+Math.floor(Math.random()*99999);  // unique cachebuster per request
+  var cb=Date.now()+''+Math.floor(Math.random()*99999);
   req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,cb);
-  // Let IMA attempt all sources including VPAID — tracking pixels fire even on 901 errors
   try{adsLoader.requestAds(req);startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT);}catch(e){log('Threw: '+s.name+' '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
 
 function onLoaded(event){
@@ -1009,14 +990,6 @@ function onLoaded(event){
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p+' - adid:'+cachedAdId,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
     S.done++;updStats();
-    // In native mode mark completed in KV immediately, then also send batch proof
-    if(PLAYER_MODE==='native'){
-      var compTotals=loadTodayTotals();
-      compTotals.completed++;
-      saveTodayTotals(compTotals.count,compTotals.completed);
-      flushKVBuffer(compTotals);
-      log('Native COMPLETE — KV completed: '+compTotals.completed,'ok');
-    }
     resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
@@ -1043,33 +1016,18 @@ function onErr(event){
   document.getElementById('idle-screen').style.display='flex';
   if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
   rebuildLoader();idx++;updStats();
-  // If all sources exhausted in native mode, wait and restart full cycle
-  if(PLAYER_MODE==='native'&&idx>=sources.length){
-    log('All sources exhausted — restarting in '+(INTERVAL/1000)+'s','warn');
-    idx=0;clearTimeout(nextTimer);nextTimer=setTimeout(showAdFrame,INTERVAL);
-  } else {
-    setTimeout(reqNext,500);
-  }
+  setTimeout(reqNext,500);
 }
 
-// ── MODIFIED: onDone now re-fetches /ads after each cycle instead of blind sched()
-//    This picks up fresh vast_urls[], poll_interval_s, and retry_on_error_s every cycle.
 function onDone(){
-  clearWatchdog();  // prevent watchdog race
+  clearWatchdog();
   log('Cycle done','info');
   playing=false;
   adPlaying=false;
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   updStats();
-  if(PLAYER_MODE==='native'){
-    // In native mode wait INTERVAL then call showAdFrame for next cycle
-    log('Native cycle done — next in '+(INTERVAL/1000)+'s','info');
-    clearTimeout(nextTimer);
-    nextTimer = setTimeout(showAdFrame, INTERVAL);
-  } else {
-    fetchSources(true, true);
-  }
+  fetchSources(true, true);
 }
 
 document.addEventListener('click',function(e){
@@ -1090,13 +1048,11 @@ function startGPS(){
 // ── IFRAME AD LOOP (Trillboards embed) ───────────────────────────────────────
 var EMBED_URL  = 'https://screen.trillboards.com?fp='+DEVICE_ID+'&ctv=1&autoplay=1';
 var adPlaying  = false;
-var adStartedThisCycle = false;  // true if ad_started fired this cycle
+var adStartedThisCycle = false;
 var adWatchdog = null;
 
 function showAdFrame() {
   if(PLAYER_MODE === 'native') {
-    // ── NATIVE MODE: our own IMA player via earner API ──────────────────────
-    // adPlaying guard is handled inside IMA loop — don't block here
     log('Native player mode — fetching earner sources', 'info');
     setNP('FETCHING...', 'Earner API');
     fetchSources(false, false);
@@ -1124,10 +1080,8 @@ function showAdFrame() {
   }
 }
 
-// Called by MainActivity when native overlay closes
 function onAdOverlayClosed(completed) {
   log('Native overlay closed completed='+completed, 'ok');
-  // If ad started but completion event never fired, treat as completed
   var wasCompleted = completed || adStartedThisCycle;
   if(adStartedThisCycle && !completed) log('Ad started but no complete event — treating as completed', 'warn');
   adStartedThisCycle = false;
@@ -1135,35 +1089,29 @@ function onAdOverlayClosed(completed) {
 }
 
 function handleOverlayLog(msg) {
-  // Ad started playing
   if(msg.indexOf('STARTED') >= 0 || msg.indexOf('AD_STARTED') >= 0 || msg.indexOf('ad_start') >= 0) {
     clearTimeout(adWatchdog);
     log('Overlay: ad started detected', 'ok');
     addEv('start', 'AD PLAYING via overlay', '');
     setNP('PLAYING', 'Trillboards');
     S.fills++; updStats();
-    // Set a completion watchdog for max ad duration
     adWatchdog = setTimeout(function(){
       log('Ad completion watchdog — closing iframe', 'warn');
       closeAdFrame('completed', 30, true);
     }, 60000);
   }
-  // Waterfall exhausted — no fill, close fast
   if(msg.indexOf('waterfallExhausted":true') >= 0 || msg.indexOf('waterfall_exhausted') >= 0) {
     log('Overlay: waterfall exhausted — no fill', 'warn');
     addEv('err', 'NO FILL — waterfall exhausted', '');
     S.err++; updStats();
     clearTimeout(adWatchdog);
-    // Close iframe quickly and retry after interval
     setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 500);
   }
-  // Ad complete
   if(msg.indexOf('COMPLETE') >= 0 && msg.indexOf('Overlay') >= 0) {
     clearTimeout(adWatchdog);
     log('Overlay: ad complete detected', 'ok');
     closeAdFrame('completed', 30, true);
   }
-  // Socket disconnect after waterfall — also signals end
   if(msg.indexOf('Socket disconnected') >= 0 && adPlaying) {
     log('Overlay: socket disconnect — checking state', 'info');
   }
@@ -1182,13 +1130,10 @@ function closeAdFrame(source, durationSec, completed) {
   addEv('done', 'AD ENDED — '+source+' '+durationSec+'s', '');
   log('Ad ended — '+source+' '+durationSec+'s completed:'+completed, 'ok');
   if(cachedDur===0) cachedDur = durationSec;
-  // Send impression
-  sendImpressionWithRetry(source, durationSec, completed, 0, false);  // KV post handled inside
-  // Schedule next iframe ad cycle
+  sendImpressionWithRetry(source, durationSec, completed, 0, false);
   setTimeout(showAdFrame, INTERVAL);
 }
 
-// Handle bridge events from TrillboardsBridge (MainActivity.java) or postMessage
 window.addEventListener('message', function(e) {
   try {
     var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
@@ -1248,7 +1193,7 @@ window.addEventListener('load',function(){
   log('IMA: '+typeof google,'ok');
   updServerIntervalDisplay();
   pollConfig();
-  // Start iframe-based ad loop
+  // Start embed-based ad loop
   setTimeout(showAdFrame, 2000);
   var _hbTimer=null;
   function reschedHeartbeat(ms){clearInterval(_hbTimer);_hbTimer=setInterval(sendHeartbeat,ms||HB_INTERVAL_MS);}
