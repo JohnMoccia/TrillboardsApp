@@ -965,15 +965,15 @@ function buildVastUrl(){
   var tpl = vastConfig.vast_tag_template;
   var w = window.innerWidth, h = window.innerHeight;
   var cb = Date.now()+''+Math.floor(Math.random()*99999);
+  // Replace template placeholders only — template already has ppid, schain, cust_params etc.
   var url = tpl
     .replace(/\{width\}/g, w)
     .replace(/\{height\}/g, h)
     .replace(/%%CACHEBUSTER%%/g, cb)
-    .replace(/\[CACHEBUSTER\]/g, cb);
-  // Append correlator, screen targeting, GPS if available
-  var sep = url.indexOf('?') >= 0 ? '&' : '?';
-  url += sep + 'correlator=' + cb + '&ppid=' + SCREEN_ID + '&description_url=' + encodeURIComponent('https://screen.trillboards.com');
-  if(gpsLat && gpsLng) url += '&lat=' + gpsLat + '&long=' + gpsLng;
+    .replace(/\[CACHEBUSTER\]/g, cb)
+    .replace(/correlator=(?=&|$)/, 'correlator='+cb);  // fill empty correlator= in template
+  // Only append GPS if not already present
+  if(gpsLat && gpsLng && url.indexOf('lat=') < 0) url += '&lat=' + gpsLat + '&long=' + gpsLng;
   log('VAST URL built: '+url,'info');
   return url;
 }
