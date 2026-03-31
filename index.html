@@ -265,7 +265,7 @@ var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 // 'embed'  = their native WebView overlay (current, proven)
 // 'native' = our own IMA player via earner API (full control, no their player)
 // Change via remote config: set player_mode in Cloudflare KV
-var PLAYER_MODE = 'native'; // earner API waterfall via Worker JWT
+var PLAYER_MODE = 'embed'; // switched back to Trillboards native player — SSP fill issues with custom IMA integration
 var VAST_CONFIG_URL = 'https://api.trillboards.com/v1/partner/vast/config';
 var vastConfig = null;       // cached /vast/config response
 var vastConfigTs = 0;        // when we last fetched it
@@ -1333,20 +1333,34 @@ window.addEventListener('load',function(){
   sendHeartbeat();
   reschedHeartbeat();
   startGPS();
-  setInterval(function(){log('Hourly earner refresh...','info');earnerCache=null;earnerCacheTs=0;fetchSources(true);
-    // Log waterfall health snapshot to KV for trend tracking
-    if(sources && sources.length > 0){
-      fetch('https://trillboards-proxy.johnm-af2.workers.dev/log-waterfall',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          sources: sources,
-          experiment: null,
-          screen_id: SCREEN_ID,
-          device_id: DEVICE_ID
-        })
-      }).catch(function(){});
-    }
+  setTimeout(logWaterfallHealth, 5000); // startup snapshot — don't wait an hour for first data point
+  // Waterfall health logger — runs hourly regardless of player mode
+  // In embed mode sources[] may be empty so we fetch directly from Partner API
+  function logWaterfallHealth() {
+    fetch('https://trillboards-proxy.johnm-af2.workers.dev/earner-ads?screen_id='+SCREEN_ID+'&_='+Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success && data.data && data.data.sources && data.data.sources.length > 0){
+        fetch('https://trillboards-proxy.johnm-af2.workers.dev/log-waterfall',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            sources: data.data.sources,
+            experiment: null,
+            screen_id: SCREEN_ID,
+            device_id: DEVICE_ID
+          })
+        }).catch(function(){});
+        log('Waterfall health logged ('+data.data.sources.length+' sources)','info');
+      }
+    }).catch(function(){});
+  }
+
+  setInterval(function(){
+    log('Hourly earner refresh...','info');
+    earnerCache=null; earnerCacheTs=0;
+    if(PLAYER_MODE==='native') fetchSources(true);
+    logWaterfallHealth();
   },3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
 });
