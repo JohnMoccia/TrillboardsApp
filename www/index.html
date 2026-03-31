@@ -1009,14 +1009,14 @@ function reqNext(){
   if(nowMin !== lastCycleMinute){ lastCycleMinute=nowMin; cyclesThisMinute=0; }
   if(cyclesThisMinute >= MAX_PER_MIN){ log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn'); sched(INTERVAL); return; }
   cyclesThisMinute++; S.req++; updStats();
-  incKVRequest(); // count this cycle as a request
+  if(idx===0) incKVRequest(); // count only cycle starts as requests, not waterfall advances
 
-  // If VAST config expired, refresh it first
-  if(!vastConfig || (Date.now()-vastConfigTs) >= vastConfigTTL){
-    log('VAST config stale — refreshing before request','info');
-    fetchVastConfig(function(cfg){
-      if(cfg){ reqNext(); }
-      else { log('VAST config unavailable — retry in '+RETRY_ON_ERROR_S+'s','err'); setNP('NO CONFIG','Retry in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
+  // If earner sources not loaded yet, fetch them first
+  if(!earnerCache || sources.length === 0){
+    log('Earner sources not loaded — fetching...','info');
+    fetchEarnerSources(function(cfg){
+      if(cfg){ idx=0; reqNext(); }
+      else { log('Earner sources unavailable — retry in '+RETRY_ON_ERROR_S+'s','err'); setNP('NO SOURCES','Retry in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
     });
     return;
   }
@@ -1136,6 +1136,7 @@ function onDone(){
   log('Ad cycle complete','info');
   playing=false;
   adPlaying=false;
+  idx=0; // reset waterfall index for next cycle
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   updStats();
