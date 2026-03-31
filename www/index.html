@@ -1004,12 +1004,14 @@ function reqNext(){
   correlator = Date.now();
   var hour = new Date().getHours();
 
-  // Rate cap
-  var nowMin = Math.floor(Date.now()/60000);
-  if(nowMin !== lastCycleMinute){ lastCycleMinute=nowMin; cyclesThisMinute=0; }
-  if(cyclesThisMinute >= MAX_PER_MIN){ log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn'); sched(INTERVAL); return; }
-  cyclesThisMinute++; S.req++; updStats();
-  if(idx===0) incKVRequest(); // count only cycle starts as requests, not waterfall advances
+  // Rate cap — only applies to cycle starts (idx===0), not waterfall advances
+  if(idx===0){
+    var nowMin = Math.floor(Date.now()/60000);
+    if(nowMin !== lastCycleMinute){ lastCycleMinute=nowMin; cyclesThisMinute=0; }
+    if(cyclesThisMinute >= MAX_PER_MIN){ log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn'); sched(INTERVAL); return; }
+    cyclesThisMinute++; S.req++; updStats();
+    incKVRequest();
+  }
 
   // If earner sources not loaded yet, fetch via fetchSources to ensure initIMA runs
   if(!earnerCache || sources.length === 0){
