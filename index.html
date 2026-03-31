@@ -265,7 +265,7 @@ var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 // 'embed'  = their native WebView overlay (current, proven)
 // 'native' = our own IMA player via earner API (full control, no their player)
 // Change via remote config: set player_mode in Cloudflare KV
-var PLAYER_MODE = 'embed'; // their WebView overlay via CurbBridge
+var PLAYER_MODE = 'native'; // earner API waterfall via Worker JWT
 var VAST_CONFIG_URL = 'https://api.trillboards.com/v1/partner/vast/config';
 var vastConfig = null;       // cached /vast/config response
 var vastConfigTs = 0;        // when we last fetched it
@@ -292,7 +292,7 @@ var S_hbOk=0,S_hbFail=0;
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
 var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
-var EARNER_URL='https://trillboards-proxy.johnm-af2.workers.dev/earner/alot-advertisement-list/'+SCREEN_ID; // routes through Worker to avoid CORS
+var EARNER_URL='https://trillboards-proxy.johnm-af2.workers.dev/earner-ads'; // Worker handles JWT auth + token refresh
 var cpmLog=[],fillHistory=[],postHistory=[];
 var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
 
@@ -905,53 +905,56 @@ function startWatchdog(ms){
 }
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
 
-// ── /vast/config fetch — cached 1hr, called once then reused ─────────────────
-function fetchVastConfig(callback) {
+// ── Earner API fetch via Worker (handles JWT auth + refresh) ─────────────────
+// Worker at /earner-ads returns pre-built waterfall sources ready for IMA
+var earnerCache = null;
+var earnerCacheTs = 0;
+var earnerCacheTTL = 25000; // 25s — slightly under the 30s ad interval
+
+function fetchEarnerSources(callback) {
   var now = Date.now();
-  if (vastConfig && (now - vastConfigTs) < vastConfigTTL) {
-    log('VAST config from cache (TTL '+ Math.round((vastConfigTTL-(now-vastConfigTs))/60000)+'min left)','info');
-    callback(vastConfig);
+  if (earnerCache && (now - earnerCacheTs) < earnerCacheTTL) {
+    log('Earner sources from cache ('+earnerCache.sources.length+' sources)','info');
+    callback(earnerCache);
     return;
   }
-  log('Fetching /vast/config...','info');
+  log('Fetching earner waterfall from Worker...','info');
   trackBytes('api','api',512);
-  fetch(VAST_CONFIG_URL + '?device_id=' + DEVICE_ID + '&screen_id=' + SCREEN_ID, {
-    headers: {'Authorization': 'Bearer ' + API_KEY}
-  })
+  fetch(EARNER_URL + '?screen_id=' + SCREEN_ID + '&_=' + now)
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (data.success && data.data && data.data.vast_tag_template) {
-      vastConfig = data.data;
-      vastConfigTs = Date.now();
-      if (data.data.cache_ttl_seconds) vastConfigTTL = data.data.cache_ttl_seconds * 1000;
-      if (data.data.timeout_ms) WATERFALL_TIMEOUT = data.data.timeout_ms;
-      if (data.data.floor_price_cpm) FLOOR_CPM = data.data.floor_price_cpm / 100; // cents → dollars
-      log('VAST config OK — template: '+data.data.vast_tag_template.substring(0,500),'ok');
+    if (data.success && data.data && data.data.sources && data.data.sources.length > 0) {
+      earnerCache = data.data;
+      earnerCacheTs = Date.now();
+      // Update sources array for stats panel
+      sources = data.data.sources.map(function(s){
+        return { name: s.name, vast_url: s.vast_url, timeout_ms: s.timeout_ms, priority: s.priority };
+      });
+      sources.forEach(function(s){ if(!srcStats[s.name]) srcStats[s.name]={req:0,fills:0,err:0}; });
+      if (data.data.ad_interval_ms) INTERVAL = data.data.ad_interval_ms;
+      log('Earner API OK — '+sources.length+' sources, interval '+Math.round(INTERVAL/1000)+'s','ok');
       var badge = document.getElementById('config-badge');
-      if(badge) badge.textContent = 'VAST: OK '+new Date().toTimeString().substring(0,8);
-      // Expose as single "source" for stats panel compatibility
-      sources = [{name:'google_gam', vast_url: data.data.vast_tag_template, priority:1, timeout_ms: data.data.timeout_ms||WATERFALL_TIMEOUT}];
-      if(!srcStats['google_gam']) srcStats['google_gam'] = {req:0,fills:0,err:0};
+      if(badge) badge.textContent = 'EARNER: OK '+new Date().toTimeString().substring(0,8);
       rendSrc();
-      callback(vastConfig);
+      callback(earnerCache);
     } else {
-      log('VAST config: unexpected response — '+JSON.stringify(data).substring(0,100),'err');
+      log('Earner API: no sources — '+JSON.stringify(data).substring(0,100),'err');
       callback(null);
     }
   })
   .catch(function(e){
-    log('VAST config fetch failed: '+e.message,'err');
+    log('Earner fetch failed: '+e.message,'err');
     callback(null);
   });
 }
 
-// ── fetchSources: now just a thin wrapper that refreshes VAST config ─────────
+// ── fetchSources: wrapper around earner API ───────────────────────────────────
 function fetchSources(background, afterCycle){
-  log((background?'Background refresh':'Fetching')+' VAST config...','info');
-  fetchVastConfig(function(cfg){
+  log((background?'Background refresh':'Fetching')+' earner waterfall...','info');
+  fetchEarnerSources(function(cfg){
     if(!cfg){
-      log('No VAST config — retry in '+RETRY_ON_ERROR_S+'s','warn');
-      if(!background) { setNP('NO CONFIG','Retrying in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
+      log('No earner sources — retry in '+RETRY_ON_ERROR_S+'s','warn');
+      if(!background) { setNP('NO SOURCES','Retrying in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
       return;
     }
     if(afterCycle){
@@ -983,20 +986,16 @@ function rebuildLoader(){
 }
 
 function buildVastUrl(){
-  if(!vastConfig||!vastConfig.vast_tag_template) return null;
-  var tpl = vastConfig.vast_tag_template;
-  var w = window.innerWidth, h = window.innerHeight;
+  // URLs come pre-built from earner API — just fill cachebuster and correlator
+  var s = sources[idx] || sources[0];
+  if(!s || !s.vast_url) return null;
   var cb = Date.now()+''+Math.floor(Math.random()*99999);
-  // Replace template placeholders only — template already has ppid, schain, cust_params etc.
-  var url = tpl
-    .replace(/\{width\}/g, w)
-    .replace(/\{height\}/g, h)
+  var url = s.vast_url
     .replace(/%%CACHEBUSTER%%/g, cb)
     .replace(/\[CACHEBUSTER\]/g, cb)
-    .replace(/correlator=(?=&|$)/, 'correlator='+cb);  // fill empty correlator= in template
-  // Only append GPS if not already present
-  if(gpsLat && gpsLng && url.indexOf('lat=') < 0) url += '&lat=' + gpsLat + '&long=' + gpsLng;
-  log('VAST URL built: '+url,'info');
+    .replace(/correlator=(?=&|$)/, 'correlator='+cb)
+    .replace(/correlator=$/, 'correlator='+cb);
+  log('VAST URL ('+s.name+'): '+url.substring(0,120)+'...','info');
   return url;
 }
 
@@ -1022,12 +1021,20 @@ function reqNext(){
     return;
   }
 
+  if(idx >= sources.length){
+    fillHistory.push(0); fillByHour[hour].reqs++;
+    log('All sources exhausted — retry in '+Math.round(INTERVAL/1000)+'s','warn');
+    setNP('NO FILL','All sources failed — retry in '+Math.round(INTERVAL/1000)+'s');
+    idx=0; earnerCache=null; earnerCacheTs=0; // invalidate cache so next cycle gets fresh sources
+    rebuildLoader(); updStats(); sched(INTERVAL); return;
+  }
+
   var vastUrl = buildVastUrl();
   if(!vastUrl){ log('Could not build VAST URL','err'); sched(RETRY_ON_ERROR_S*1000); return; }
 
-  var s = sources[0] || {name:'google_gam', timeout_ms: WATERFALL_TIMEOUT};
-  log('Requesting: '+s.name,'info');
-  setNP('REQUESTING...', 'Google GAM via Trillboards');
+  var s = sources[idx];
+  log('Requesting: '+s.name+' ('+idx+'/'+sources.length+')','info');
+  setNP('REQUESTING...',s.name+' priority '+s.priority);
   if(srcStats[s.name]) srcStats[s.name].req++;
 
   var req = new google.ima.AdsRequest();
@@ -1037,7 +1044,7 @@ function reqNext(){
 
   fillByHour[hour].reqs++;
   try{ adsLoader.requestAds(req); startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT); }
-  catch(e){ log('IMA request threw: '+e.message,'err'); S.err++; rebuildLoader(); sched(RETRY_ON_ERROR_S*1000); }
+  catch(e){ log('IMA request threw: '+e.message,'err'); if(srcStats[s.name])srcStats[s.name].err++; S.err++; rebuildLoader(); idx++; setTimeout(function(){reqNext();},300); }
 }
 
 function onLoaded(event){
@@ -1112,11 +1119,16 @@ function onErr(event){
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null;}
-  rebuildLoader();updStats();
-  // On no-fill, invalidate VAST config cache so we get a fresh template next cycle
-  if(noFill){ vastConfigTs=0; log('Invalidated VAST config cache for next cycle','info'); }
-  setNP('NO FILL','Retry in '+Math.round(INTERVAL/1000)+'s');
-  sched(INTERVAL);
+  rebuildLoader(); updStats();
+  if(noFill){
+    log('No fill on '+s.name+' — trying next source','warn');
+    idx++;
+    setTimeout(function(){reqNext();}, 300);
+  } else {
+    // Hard error — skip this source
+    idx++;
+    setTimeout(function(){reqNext();}, 300);
+  }
 }
 
 function onDone(){
@@ -1155,8 +1167,8 @@ var adWatchdog = null;
 
 function showAdFrame() {
   if(PLAYER_MODE === 'native') {
-    log('Native player mode — fetching VAST config', 'info');
-    setNP('FETCHING...', '/vast/config → Google GAM');
+    log('Native player mode — fetching earner waterfall', 'info');
+    setNP('FETCHING...', 'Earner API via Worker');
     fetchSources(false, false);
     return;
   }
@@ -1303,7 +1315,7 @@ window.addEventListener('load',function(){
   sendHeartbeat();
   reschedHeartbeat();
   startGPS();
-  setInterval(function(){log('Hourly VAST config refresh...','info');vastConfigTs=0;fetchSources(true);},3600000);
+  setInterval(function(){log('Hourly earner refresh...','info');earnerCache=null;earnerCacheTs=0;fetchSources(true);},3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
 });
 </script>
