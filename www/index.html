@@ -909,7 +909,7 @@ function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTime
 // Worker at /earner-ads returns pre-built waterfall sources ready for IMA
 var earnerCache = null;
 var earnerCacheTs = 0;
-var earnerCacheTTL = 25000; // 25s — slightly under the 30s ad interval
+var earnerCacheTTL = 1800000; // 30 min — refresh every 30 min, not every cycle
 
 function fetchEarnerSources(callback) {
   var now = Date.now();
@@ -1048,8 +1048,8 @@ function reqNext(){
 }
 
 function onLoaded(event){
-  var s=sources[0]||{name:'google_gam'};
-  log('Manager loaded: '+s.name,'ok');
+  var s=sources[idx]||sources[0]||{name:'google_gam'};
+  log('Manager loaded: '+s.name+' (idx='+idx+')','ok');
   if(adsManager){try{adsManager.destroy()}catch(e){}}
   adsManager=event.getAdsManager(vid);
   adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
@@ -1066,7 +1066,7 @@ function onLoaded(event){
     document.getElementById('idle-screen').style.display='none';
     setNP('PLAYING: GOOGLE GAM',adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);
     // Send start event per API spec
-    sendEventToAPI('start', cachedAdId||'unknown', cachedDur||0);
+    sendEventToAPI('start', cachedAdId||'unknown', (cachedDur||0)*1000);
   },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
     S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
@@ -1074,16 +1074,16 @@ function onLoaded(event){
     sendImpressionWithRetry(cachedAdId||'unknown',cachedDur||0,false,0,false);},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){
     addEv('q','25% - '+s.name,'');
-    sendEventToAPI('firstQuartile', cachedAdId||'unknown', cachedDur||0);
+    sendEventToAPI('firstQuartile', cachedAdId||'unknown', (cachedDur||0)*1000);
   },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){
     addEv('q','50% - '+s.name,'');
-    sendEventToAPI('midpoint', cachedAdId||'unknown', cachedDur||0);
+    sendEventToAPI('midpoint', cachedAdId||'unknown', (cachedDur||0)*1000);
   },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);
     addEv('q','75% - '+s.name,'');
-    sendEventToAPI('thirdQuartile', cachedAdId||'unknown', cachedDur||0);
+    sendEventToAPI('thirdQuartile', cachedAdId||'unknown', (cachedDur||0)*1000);
   },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     try{var ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);}catch(e){}
@@ -1091,7 +1091,7 @@ function onLoaded(event){
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p+' - adid:'+cachedAdId,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
     S.done++;updStats();
-    sendEventToAPI('complete', cachedAdId||'unknown', cachedDur||0);
+    sendEventToAPI('complete', cachedAdId||'unknown', (cachedDur||0)*1000);
     resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
@@ -1102,12 +1102,12 @@ function onLoaded(event){
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
     setTimeout(function(){var style=document.createElement('style');style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}.ima-controls-div{display:none!important;}.ima-mute-button{display:none!important;}.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';document.head.appendChild(style);},500);
-    idx=0;
-  }catch(e){log('Start err: '+e.message,'err');if(srcStats[s.name])srcStats[s.name].err++;S.err++;rebuildLoader();sched(RETRY_ON_ERROR_S*1000);}}
+    // do NOT reset idx here — keep waterfall position until cycle completes
+  }catch(e){log('Start err: '+e.message,'err');if(srcStats[s.name])srcStats[s.name].err++;S.err++;rebuildLoader();idx++;setTimeout(function(){reqNext();},300);}}
 
 function onErr(event){
   clearWatchdog();
-  var s=sources[0]||{name:'google_gam'};
+  var s=sources[idx]||sources[0]||{name:'google_gam'};
   var er=event.getError?event.getError().toString():'unknown';
   var erCode=event.getError&&event.getError().getErrorCode?event.getError().getErrorCode():0;
   var noFill=(erCode===303||erCode===1205||er.indexOf('empty')>=0||er.indexOf('no ad')>=0||er.indexOf('VAST_EMPTY')>=0);
