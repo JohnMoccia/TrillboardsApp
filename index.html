@@ -986,6 +986,8 @@ function rebuildLoader(){
   log('Loader rebuilt','info');
 }
 
+var REAL_GAID = 'a7c717bf-7839-4f98-9384-10ca1ad1abe1'; // SM-T500 real Android Advertising ID
+
 function buildVastUrl(){
   // URLs come pre-built from earner API — just fill cachebuster and correlator
   var s = sources[idx] || sources[0];
@@ -995,7 +997,13 @@ function buildVastUrl(){
     .replace(/%%CACHEBUSTER%%/g, cb)
     .replace(/\[CACHEBUSTER\]/g, cb)
     .replace(/correlator=(?=&|$)/, 'correlator='+cb)
-    .replace(/correlator=$/, 'correlator='+cb);
+    .replace(/correlator=$/, 'correlator='+cb)
+    // FIX: replace screen ID used as device ad ID with real Android GAID
+    .replace(/rdid=69a076ad2ccbba67a5ba1c1e/g, 'rdid='+REAL_GAID)
+    .replace(/ifa=69a076ad2ccbba67a5ba1c1e/g, 'ifa='+REAL_GAID)
+    // FIX: correct idtype to adid (Android GAID) — dpid/ppid causes SSP rejections
+    .replace(/idtype=dpid/g, 'idtype=adid')
+    .replace(/idtype=ppid/g, 'idtype=adid');
   log('VAST URL ('+s.name+'): '+url.substring(0,120)+'...','info');
   return url;
 }
