@@ -899,6 +899,7 @@ function startWatchdog(ms){
     log('WATCHDOG: '+(s?s.name:'?')+' timed out after '+ms/1000+'s — moving on','warn');
     if(s){srcStats[s.name].err++;S.err++;}
     playing=false;
+    adPlaying=false; // FIX: reset adPlaying so showAdFrame() is not permanently blocked
     if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
     rebuildLoader();idx++;updStats();reqNext();
   },ms);
@@ -1113,21 +1114,23 @@ function onLoaded(event){
 
 function onErr(event){
   clearWatchdog();
-  var s=sources[idx]||sources[0]||{name:'google_gam'};
+  var s=sources[idx]||sources[0]||{name:'google_gam'}; // snapshot s NOW before idx changes
+  var sName=s.name; // capture name immediately — idx may advance before callbacks fire
   var er=event.getError?event.getError().toString():'unknown';
   var erCode=event.getError&&event.getError().getErrorCode?event.getError().getErrorCode():0;
   var noFill=(erCode===303||erCode===1205||er.indexOf('empty')>=0||er.indexOf('no ad')>=0||er.indexOf('VAST_EMPTY')>=0);
-  log((noFill?'NO FILL':'IMA ERROR')+' - '+s.name+' ['+erCode+'] - '+er.substring(0,60),'err');
-  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+s.name+(noFill?' (empty VAST)':' ('+erCode+')'),'');
-  if(srcStats[s.name]){srcStats[s.name].err++;}
+  log((noFill?'NO FILL':'IMA ERROR')+' - '+sName+' ['+erCode+'] - '+er.substring(0,60),'err');
+  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+sName+(noFill?' (empty VAST)':' ('+erCode+')'),'');
+  if(srcStats[sName]){srcStats[sName].err++;}
   S.err++;fillHistory.push(0);
   playing=false;
+  adPlaying=false; // FIX: reset adPlaying so showAdFrame() is not permanently blocked
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null;}
   rebuildLoader(); updStats();
   if(noFill){
-    log('No fill on '+s.name+' — trying next source','warn');
+    log('No fill on '+sName+' — trying next source','warn');
     idx++;
     setTimeout(function(){reqNext();}, 300);
   } else {
@@ -1322,7 +1325,21 @@ window.addEventListener('load',function(){
   sendHeartbeat();
   reschedHeartbeat();
   startGPS();
-  setInterval(function(){log('Hourly earner refresh...','info');earnerCache=null;earnerCacheTs=0;fetchSources(true);},3600000);
+  setInterval(function(){log('Hourly earner refresh...','info');earnerCache=null;earnerCacheTs=0;fetchSources(true);
+    // Log waterfall health snapshot to KV for trend tracking
+    if(sources && sources.length > 0){
+      fetch('https://trillboards-proxy.johnm-af2.workers.dev/log-waterfall',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          sources: sources,
+          experiment: null,
+          screen_id: SCREEN_ID,
+          device_id: DEVICE_ID
+        })
+      }).catch(function(){});
+    }
+  },3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
 });
 </script>
