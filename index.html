@@ -1011,13 +1011,17 @@ function reqNext(){
   cyclesThisMinute++; S.req++; updStats();
   if(idx===0) incKVRequest(); // count only cycle starts as requests, not waterfall advances
 
-  // If earner sources not loaded yet, fetch them first
+  // If earner sources not loaded yet, fetch via fetchSources to ensure initIMA runs
   if(!earnerCache || sources.length === 0){
     log('Earner sources not loaded — fetching...','info');
-    fetchEarnerSources(function(cfg){
-      if(cfg){ idx=0; reqNext(); }
-      else { log('Earner sources unavailable — retry in '+RETRY_ON_ERROR_S+'s','err'); setNP('NO SOURCES','Retry in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
-    });
+    fetchSources(false, false); // goes through initIMA → reqNext
+    return;
+  }
+
+  // If IMA not initialized yet, init it now
+  if(!adsLoader){
+    log('IMA not initialized — calling initIMA','info');
+    initIMA();
     return;
   }
 
