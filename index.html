@@ -436,18 +436,20 @@ function logToKV(adid, durationSec, completed, impressionId) {
     totals.completed++;
     saveTodayTotals(totals.count, totals.completed);
     log('KV completed: '+totals.completed+' / requests: '+totals.count, 'info');
+    // No KV flush here — handled by 5-min interval, but flush immediately on completion for accuracy
     flushKVBuffer(totals);
   }
 }
 
 // Call once per ad cycle start (request fired)
+// Saves to localStorage only — KV flush happens on 5-min interval to stay under 1,000 writes/day
 function incKVRequest() {
   if (REMOTE_CONFIG.kv_enabled === false) return;
   var totals = loadTodayTotals();
   totals.count++;
   saveTodayTotals(totals.count, totals.completed);
   log('KV request #'+totals.count+' ('+totals.completed+' completed)', 'info');
-  flushKVBuffer(totals);
+  // No KV flush here — handled by 5-min interval
 }
 
 function flushKVBuffer(totals) {
@@ -1369,6 +1371,14 @@ window.addEventListener('load',function(){
     logWaterfallHealth();
   },3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
+  // KV flush every 5 min — keeps writes under 1,000/day (288 flush + 24 waterfall + ~36 other = 348/day)
+  setInterval(function(){
+    var totals = loadTodayTotals();
+    if(totals.count > 0) {
+      log('5-min KV flush: '+totals.count+' requests, '+totals.completed+' completed','info');
+      flushKVBuffer(totals);
+    }
+  }, 300000);
 });
 </script>
 </body>
