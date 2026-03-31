@@ -1234,11 +1234,17 @@ function handleOverlayLog(msg) {
     }, 60000);
   }
   if(msg.indexOf('waterfallExhausted":true') >= 0 || msg.indexOf('waterfall_exhausted') >= 0) {
-    log('Overlay: waterfall exhausted — no fill', 'warn');
-    addEv('err', 'NO FILL — waterfall exhausted', '');
+    log('Overlay: waterfall exhausted — letting fallback play, watchdog set to 60s', 'warn');
+    addEv('err', 'NO FILL — waterfall exhausted (fallback playing)', '');
     S.err++; updStats();
+    // FIX: don't close immediately — their player falls back to house ads after waterfall exhaustion
+    // If we close here, adPlaying=false and onAdOverlayClosed skips scheduling the next cycle
+    // Instead set a watchdog and let onAdOverlayClosed handle the close naturally
     clearTimeout(adWatchdog);
-    setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 500);
+    adWatchdog = setTimeout(function(){
+      log('Overlay: fallback watchdog fired — closing', 'warn');
+      closeAdFrame('no_fill', 0, false);
+    }, 90000); // 90s max for fallback
   }
   if(msg.indexOf('COMPLETE') >= 0 && msg.indexOf('Overlay') >= 0) {
     clearTimeout(adWatchdog);
