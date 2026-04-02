@@ -43,6 +43,10 @@ public class MainActivity extends CordovaActivity {
     private Handler  mainHandler = new Handler(Looper.getMainLooper());
     private Runnable adWatchdog  = null;
 
+    // Player mode — set by JS via CurbBridge.setPlayerMode()
+    // Defaults to embed for safety — native mode must be explicitly set
+    private String playerMode = "embed";
+
     // Impression queue — stored locally, batch sent on app resume
     private final List<JSONObject> pendingImpressions = new ArrayList<>();
 
@@ -73,8 +77,15 @@ public class MainActivity extends CordovaActivity {
             wv.addJavascriptInterface(new CurbBridge(), "CurbBridge");
             Log.i(TAG, "CurbBridge injected");
         }
-        // Pre-warm the ad WebView so it loads content cache before first ad request
-        mainHandler.postDelayed(() -> createAdWebView(), 3000);
+        // Pre-warm deferred — JS will call setPlayerMode first, then we decide
+        // whether to create the ad WebView based on player mode
+        mainHandler.postDelayed(() -> {
+            if ("embed".equals(playerMode)) {
+                createAdWebView();
+            } else {
+                Log.i(TAG, "Native mode — skipping embed WebView creation");
+            }
+        }, 3000);
     }
 
     @Override
@@ -107,6 +118,30 @@ public class MainActivity extends CordovaActivity {
         public void closeAd() {
             Log.i(TAG, "closeAd() called from JS");
             mainHandler.post(() -> dismissAdOverlay(false));
+        }
+
+        // Called by index.html as soon as player mode is known from KV config
+        // Allows Java to decide whether to create the embed WebView
+        @JavascriptInterface
+        public void setPlayerMode(String mode) {
+            Log.i(TAG, "setPlayerMode: " + mode);
+            playerMode = mode;
+            mainHandler.post(() -> {
+                if ("embed".equals(mode)) {
+                    // Embed mode — ensure WebView exists
+                    if (adWebView == null) createAdWebView();
+                } else {
+                    // Native mode — destroy embed WebView if it exists
+                    if (adWebView != null) {
+                        Log.i(TAG, "Native mode — destroying embed WebView");
+                        adWebView.stopLoading();
+                        adWebView.loadUrl("about:blank");
+                        adWebView.setVisibility(android.view.View.GONE);
+                        adWebView.destroy();
+                        adWebView = null;
+                    }
+                }
+            });
         }
     }
 
@@ -142,7 +177,6 @@ public class MainActivity extends CordovaActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 Log.i(TAG, "Ad overlay page loaded: " + url);
-                // Injection handled by launchAdOverlay — no injection here
             }
 
             @Override
@@ -155,7 +189,6 @@ public class MainActivity extends CordovaActivity {
                         conn.setRequestMethod("GET");
                         conn.setRequestProperty("Origin", "https://screen.trillboards.com");
                         conn.setRequestProperty("Referer", "https://screen.trillboards.com/");
-                        // Forward all request headers including x-device-token
                         for (java.util.Map.Entry<String, String> h : request.getRequestHeaders().entrySet()) {
                             try { conn.setRequestProperty(h.getKey(), h.getValue()); } catch (Exception ignored) {}
                         }
@@ -166,7 +199,6 @@ public class MainActivity extends CordovaActivity {
                         final String contentType = (rawType != null) ? rawType : "application/json";
                         int status = conn.getResponseCode();
                         Log.i(TAG, "Proxied " + url.substring(url.lastIndexOf("/")+1) + " → " + status);
-                        // Inject interceptor after check-screen — their app is fully ready at this point
                         if (url.contains("check-screen") && status == 200) {
                             mainHandler.postDelayed(() -> injectConsoleInterceptor(view), 1500);
                         }
@@ -193,10 +225,8 @@ public class MainActivity extends CordovaActivity {
             ViewGroup.LayoutParams.MATCH_PARENT
         );
         addContentView(adWebView, params);
-        // Load once — stays alive, caches content, no re-init needed
         adWebView.loadUrl(EMBED_URL);
         Log.i(TAG, "Ad WebView loaded — will persist across cycles");
-        // Inject interceptor after React app loads on first boot
         mainHandler.postDelayed(() -> injectConsoleInterceptor(adWebView), 4000);
     }
 
@@ -206,17 +236,13 @@ public class MainActivity extends CordovaActivity {
         adShowing = true;
         Log.i(TAG, "Showing ad overlay");
 
-        // Create WebView if first time
         if (adWebView == null) createAdWebView();
 
-        // Show it on top
         adWebView.setVisibility(android.view.View.VISIBLE);
         adWebView.bringToFront();
 
-        // Reset cycle flags — interceptor re-injected after check-screen 200
         adWebView.evaluateJavascript("window._cs=false;window._cc=false;window._cn=false;", null);
 
-        // Resume videos
         adWebView.evaluateJavascript(
             "(function(){" +
             "  try{" +
@@ -229,21 +255,18 @@ public class MainActivity extends CordovaActivity {
 
         adWatchdog = () -> {
             Log.w(TAG, "Ad watchdog fired — treating as completed (ad played)");
-            dismissAdOverlay(true);  // always completed — we know ads play
+            dismissAdOverlay(true);
         };
         mainHandler.postDelayed(adWatchdog, 120000);
     }
 
     // ── Inject JS console interceptor to detect ad events ────────────────────
     private void injectConsoleInterceptor(WebView view) {
-        // Patch fetch to add Origin header so check-screen CORS passes
-        // Poll for video playing state — works across all frames, no console hook needed
         String js =
             "window._cs=false;window._cc=false;window._cn=false;\n" +
             "if(window._pollTimer)clearInterval(window._pollTimer);\n" +
             "window._pollTimer=setInterval(function(){\n" +
             "  try{\n" +
-            // Check all video elements in all iframes
             "    var vids=[];\n" +
             "    vids=vids.concat(Array.from(document.querySelectorAll('video')));\n" +
             "    try{var frames=document.querySelectorAll('iframe');for(var i=0;i<frames.length;i++){try{vids=vids.concat(Array.from(frames[i].contentDocument.querySelectorAll('video')));}catch(e){}}}catch(e){}\n" +
@@ -267,15 +290,12 @@ public class MainActivity extends CordovaActivity {
             Log.i(TAG, "AD STARTED via console intercept");
             if (adWatchdog != null) {
                 mainHandler.removeCallbacks(adWatchdog);
-                // New watchdog for completion
                 adWatchdog = () -> {
                     Log.w(TAG, "Ad completion watchdog — dismissing");
                     dismissAdOverlay(true);
                 };
-                mainHandler.postDelayed(adWatchdog, 45000);  // 45s — 30s ad + 15s buffer
+                mainHandler.postDelayed(adWatchdog, 45000);
             }
-            // KV handled by JS logToKV
-            // Tell our JS ad started so overlay close treats it as completed
             if (appView != null) {
                 runOnUiThread(() -> appView.getEngine().evaluateJavascript(
                     "adStartedThisCycle=true;", null));
@@ -287,13 +307,11 @@ public class MainActivity extends CordovaActivity {
             Log.i(TAG, "AD COMPLETE via console intercept");
             if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
             mainHandler.post(() -> dismissAdOverlay(true));
-            // KV handled by JS logToKV — postToKV("ad_ended", "trillboards", 30, true);
         }
 
         @JavascriptInterface
         public void onNoFill() {
             Log.i(TAG, "NO FILL via console — fallback cache loads in ~1s");
-            // Cached content plays within seconds — 15s watchdog is plenty
             if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
             adWatchdog = () -> {
                 Log.w(TAG, "Post-no-fill watchdog — dismissing overlay");
@@ -303,7 +321,7 @@ public class MainActivity extends CordovaActivity {
         }
     }
 
-    // ── Trillboards SDK bridge (fires from their SDK auto-detection) ──────────
+    // ── Trillboards SDK bridge ────────────────────────────────────────────────
     public class TrillboardsBridge {
 
         @JavascriptInterface
@@ -320,7 +338,6 @@ public class MainActivity extends CordovaActivity {
                     case "ad_started":
                         Log.i(TAG, "AD STARTED — " + data.optString("source","?"));
                         if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-                        // KV handled by JS logToKV — postToKV("ad_started", data.optString("source","trillboards"), 0, false);
                         break;
 
                     case "programmatic_ended":
@@ -329,16 +346,11 @@ public class MainActivity extends CordovaActivity {
                         String src = data.optString("source", "trillboards");
                         Log.i(TAG, "AD ENDED — " + src + " " + dur + "s");
                         if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-                        final int durFinal = dur;
-                        final String srcFinal = src;
                         mainHandler.post(() -> dismissAdOverlay(true));
-                        // KV handled by JS logToKV — postToKV("ad_ended", srcFinal, durFinal, true);
                         break;
 
                     case "programmatic_no_fill":
                         Log.i(TAG, "NO FILL — waiting for fallback cached content");
-                        // Cache loads in ~1s after exhaustion, ad starts immediately after
-                        // Give 15s for fallback to kick in, then watchdog handles it
                         if (adWatchdog != null) {
                             mainHandler.removeCallbacks(adWatchdog);
                             adWatchdog = () -> {
@@ -355,21 +367,18 @@ public class MainActivity extends CordovaActivity {
         }
     }
 
-    // ── Dismiss overlay — hide WebView, pause their player ──────────────────
+    // ── Dismiss overlay ───────────────────────────────────────────────────────
     private void dismissAdOverlay(boolean completed) {
         if (!adShowing) return;
         adShowing = false;
         Log.i(TAG, "Hiding ad overlay completed=" + completed);
 
         if (adWebView != null) {
-            // Pause their player so it doesn't auto-advance while hidden
             adWebView.evaluateJavascript(
                 "(function(){" +
                 "  try{" +
-                // Pause any playing video elements
                 "    var vids=document.querySelectorAll('video');" +
                 "    for(var i=0;i<vids.length;i++){vids[i].pause();}" +
-                // Tell their overlay to stop if possible
                 "    if(window.__overlay && window.__overlay.pause) window.__overlay.pause();" +
                 "    if(window.overlayInstance && window.overlayInstance.pause) window.overlayInstance.pause();" +
                 "  }catch(e){}" +
@@ -377,7 +386,6 @@ public class MainActivity extends CordovaActivity {
             adWebView.setVisibility(android.view.View.GONE);
         }
 
-        // Notify our index.html to schedule next ad
         if (this.appView != null) {
             final boolean comp = completed;
             runOnUiThread(() -> {
@@ -389,7 +397,7 @@ public class MainActivity extends CordovaActivity {
         }
     }
 
-    // ── KV POST — queue complete events, send immediately for others ─────────
+    // ── KV POST ───────────────────────────────────────────────────────────────
     private void postToKV(final String type, final String source,
                           final int durationSec, final boolean completed) {
         try {
@@ -405,13 +413,11 @@ public class MainActivity extends CordovaActivity {
             body.put("timestamp",   sdf.format(new Date()));
 
             if (completed && "ad_ended".equals(type)) {
-                // Queue completed impressions — batch send on app resume
                 synchronized (pendingImpressions) {
                     pendingImpressions.add(body);
                 }
                 Log.i(TAG, "Queued completed impression — total pending: " + pendingImpressions.size());
             } else {
-                // Send non-complete events immediately
                 sendToKV(body);
             }
         } catch (Exception e) {
