@@ -1006,8 +1006,11 @@ function buildVastUrl(){
     // FIX: correct idtype to adid (Android GAID) — dpid/ppid causes SSP rejections
     .replace(/idtype=dpid/g, 'idtype=adid')
     .replace(/idtype=ppid/g, 'idtype=adid');
-  log('VAST URL ('+s.name+'): '+url.substring(0,120)+'...','info');
-  return url;
+  // VAST PROXY: route through Cloudflare Worker so SSPs see Origin: screen.trillboards.com
+  // Cordova WebView sends null/localhost origin which SSPs flag as IVT → 303
+  var proxied = 'https://trillboards-proxy.johnm-af2.workers.dev/proxy-vast?url=' + encodeURIComponent(url);
+  log('VAST URL ('+s.name+') via proxy: '+url.substring(0,80)+'...','info');
+  return proxied;
 }
 
 function reqNext(){
