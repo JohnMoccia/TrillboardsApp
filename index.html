@@ -273,7 +273,7 @@ var vastConfigTTL = 3600000; // 1 hour default, overridden by cache_ttl_seconds
 var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
 var CONFIG_URL='https://trillboards-proxy.johnm-af2.workers.dev/get-config';
 var KV_SECRET='curb2026';
-var INTERVAL=30000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=8000,FORCED_SOURCE=0;
+var INTERVAL=30000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=15000,FORCED_SOURCE=0;
 var MAX_PER_MIN=10; // raised from 2 — waterfall has 6 sources, old cap blocked mid-cycle retries
 var lastCycleMinute=-1,cyclesThisMinute=0;
 var correlator=Date.now();
@@ -1085,7 +1085,7 @@ function reqNext(){
     .replace(/idtype=ppid/g, 'idtype=adid');
 
   var controller = new AbortController();
-  var fetchTimeout = setTimeout(function(){ controller.abort(); }, s.timeout_ms || 10000);
+  var fetchTimeout = setTimeout(function(){ controller.abort(); }, s.timeout_ms || 15000);
 
   log('Fetching VAST XML direct from device: '+s.name,'info');
   fetch(directVastUrl, { credentials: 'omit', mode: 'cors', signal: controller.signal })
