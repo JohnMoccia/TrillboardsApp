@@ -267,27 +267,7 @@ var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 // Change via remote config: set player_mode in Cloudflare KV
 var PLAYER_MODE = 'embed'; // switched back to Trillboards native player — SSP fill issues with custom IMA integration
 
-// ── BLOCK TRILLBOARDS EMBED IN NATIVE MODE ───────────────────────────────
-// Intercept fetch and XHR to screen.trillboards.com so their player cannot
-// load alongside ours when in native mode — one player only
-(function(){
-  var _fetch = window.fetch;
-  window.fetch = function(url, opts){
-    if(PLAYER_MODE === 'native' && typeof url === 'string' && url.indexOf('screen.trillboards.com') >= 0){
-      console.log('[Curb] Blocked embed fetch in native mode: '+String(url).substring(0,80));
-      return Promise.reject(new TypeError('Blocked in native mode'));
-    }
-    return _fetch.apply(this, arguments);
-  };
-  var _xhrOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url){
-    if(PLAYER_MODE === 'native' && typeof url === 'string' && url.indexOf('screen.trillboards.com') >= 0){
-      console.log('[Curb] Blocked embed XHR in native mode: '+String(url).substring(0,80));
-      return;
-    }
-    return _xhrOpen.apply(this, arguments);
-  };
-})();
+// Embed blocking handled by Java setPlayerMode() — no JS interceptor needed
 var VAST_CONFIG_URL = 'https://api.trillboards.com/v1/partner/vast/config';
 var vastConfig = null;       // cached /vast/config response
 var vastConfigTs = 0;        // when we last fetched it
