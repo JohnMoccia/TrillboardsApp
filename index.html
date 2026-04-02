@@ -95,7 +95,7 @@
 <!-- Trillboards embed iframe — shown fullscreen when ad plays -->
 <iframe id="ad-frame" src="" allow="autoplay; fullscreen; geolocation" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:5000"></iframe>
 <div id="ad-container" style="position:fixed;top:0;left:0;width:100%;height:100%;display:none;z-index:10">
-  <video id="content-video" playsinline muted></video>
+  <video id="content-video" playsinline muted poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
   <div id="ad-display"></div>
   <div id="touch-blocker" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>
 </div>
@@ -923,7 +923,24 @@ function fetchEarnerSources(callback) {
   }
   log('Fetching earner waterfall from Worker...','info');
   trackBytes('api','api',512);
-  fetch(EARNER_URL + '?screen_id=' + SCREEN_ID + '&_=' + now)
+  // Pass playerTruth params — match what screen.trillboards.com sends to earner API
+  // These signals affect VAST URL targeting and IVT scoring on their backend
+  var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  var connType = (conn && (conn.type || conn.effectiveType)) || 'wifi';
+  var devMem = navigator.deviceMemory ? String(navigator.deviceMemory) : '4';
+  var platHint = (navigator.userAgentData && navigator.userAgentData.platform) ? navigator.userAgentData.platform : 'Android';
+  var slotW = window.innerWidth || 1333;
+  var slotH = window.innerHeight || 800;
+  var earnerParams = '?screen_id='+SCREEN_ID
+    +'&slot_w='+slotW
+    +'&slot_h='+slotH
+    +'&muted=0'
+    +'&autoplay=1'
+    +'&connection_type='+encodeURIComponent(connType)
+    +'&device_memory='+devMem
+    +'&platform_hint='+encodeURIComponent(platHint)
+    +'&_='+now;
+  fetch(EARNER_URL + earnerParams)
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (data.success && data.data && data.data.sources && data.data.sources.length > 0) {
@@ -1006,11 +1023,8 @@ function buildVastUrl(){
     // FIX: correct idtype to adid (Android GAID) — dpid/ppid causes SSP rejections
     .replace(/idtype=dpid/g, 'idtype=adid')
     .replace(/idtype=ppid/g, 'idtype=adid');
-  // VAST PROXY: route through Cloudflare Worker so SSPs see Origin: screen.trillboards.com
-  // Cordova WebView sends null/localhost origin which SSPs flag as IVT → 303
-  var proxied = 'https://trillboards-proxy.johnm-af2.workers.dev/proxy-vast?url=' + encodeURIComponent(url);
-  log('VAST URL ('+s.name+') via proxy: '+url.substring(0,80)+'...','info');
-  return proxied;
+  log('VAST URL ('+s.name+'): '+url.substring(0,80)+'...','info');
+  return url;
 }
 
 function reqNext(){
@@ -1059,27 +1073,31 @@ function reqNext(){
 
   fillByHour[hour].reqs++;
 
-  // ── CLIENT-DIRECT VAST FETCH ──────────────────────────────────────────────
-  // Match Trillboards native player behavior: fetch VAST XML server-side first
-  // then pass raw XML to IMA via adsResponse (not adTagUrl)
-  // This means IMA never makes its own fetch from the device — avoids IVT rejection
-  var proxyFetchUrl = 'https://trillboards-proxy.johnm-af2.workers.dev/proxy-vast?url=' + encodeURIComponent(s.vast_url
+  // ── CLIENT-DIRECT VAST FETCH FROM DEVICE ────────────────────────────────
+  // Fetch VAST XML directly from the device — device IP hits SSP, not Cloudflare
+  // DSPs flag server farm IPs as GIVT — must come from the real tablet IP
+  var directVastUrl = s.vast_url
     .replace(/%%CACHEBUSTER%%/g, Date.now()+''+Math.floor(Math.random()*99999))
     .replace(/\[CACHEBUSTER\]/g, Date.now()+''+Math.floor(Math.random()*99999))
     .replace(/rdid=69a076ad2ccbba67a5ba1c1e/g, 'rdid='+REAL_GAID)
     .replace(/ifa=69a076ad2ccbba67a5ba1c1e/g, 'ifa='+REAL_GAID)
     .replace(/idtype=dpid/g, 'idtype=adid')
-    .replace(/idtype=ppid/g, 'idtype=adid'));
+    .replace(/idtype=ppid/g, 'idtype=adid');
 
-  log('Fetching VAST XML server-side: '+s.name,'info');
-  fetch(proxyFetchUrl)
+  var controller = new AbortController();
+  var fetchTimeout = setTimeout(function(){ controller.abort(); }, s.timeout_ms || 10000);
+
+  log('Fetching VAST XML direct from device: '+s.name,'info');
+  fetch(directVastUrl, { credentials: 'omit', mode: 'cors', signal: controller.signal })
   .then(function(r){
+    clearTimeout(fetchTimeout);
     if(!r.ok){ throw new Error('HTTP '+r.status); }
     return r.text();
   })
   .then(function(vastXml){
-    if(!vastXml || vastXml.length < 50){
-      throw new Error('Empty VAST response ('+vastXml.length+' bytes)');
+    // Match Trillboards player: check for <Ad element, not just length
+    if(!vastXml || vastXml.indexOf('<Ad') === -1){
+      throw new Error('Empty VAST (no Ad element, '+vastXml.length+' bytes)');
     }
     log('VAST XML fetched ('+vastXml.length+' bytes) — passing to IMA via adsResponse','ok');
     var req = new google.ima.AdsRequest();
@@ -1198,6 +1216,8 @@ function onDone(){
   log('Ad cycle complete','info');
   playing=false;
   adPlaying=false;
+  // Signal IMA content is done — matches Trillboards player, enables clean subsequent ad requests
+  try{ if(adsLoader) adsLoader.contentComplete(); }catch(e){}
   idx=0; // reset waterfall index for next cycle
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
@@ -1373,6 +1393,10 @@ window.addEventListener('load',function(){
     var tsv=sc('curb_test');if(tsv==='1')TEST_MODE=true;
     var ffv=parseInt(sc('curb_font'));if(!isNaN(ffv)&&ffv>=8&&ffv<=18){FONT_SIZE=ffv;setFontSize(ffv);}
     log('Settings loaded','info');
+    // Inject Trillboards window globals — matches what their native app injects via Android JS interface
+    window.__TRILL_IS_CTV__ = true;
+    var _conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    window.__TRILL_CONNECTION_TYPE__ = (_conn && (_conn.type || _conn.effectiveType)) || 'wifi';
   }catch(e){log('Settings load error: '+e.message,'warn');}
   log('IMA: '+typeof google,'ok');
   updServerIntervalDisplay();
