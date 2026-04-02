@@ -1059,8 +1059,16 @@ function reqNext(){
 
   var req = new google.ima.AdsRequest();
   req.adTagUrl = vastUrl;
-  req.linearAdSlotWidth = req.nonLinearAdSlotWidth = window.innerWidth;
-  req.linearAdSlotHeight = req.nonLinearAdSlotHeight = window.innerHeight;
+  req.linearAdSlotWidth = window.innerWidth;
+  req.linearAdSlotHeight = window.innerHeight;
+  req.nonLinearAdSlotWidth = 0;
+  req.nonLinearAdSlotHeight = 0;
+  // CTV signals — match Trillboards native player settings for better DFP fill
+  if(typeof req.setContinuousPlayback === 'function') req.setContinuousPlayback(true);
+  if(typeof req.setAdWillAutoPlay === 'function') req.setAdWillAutoPlay(true);
+  if(typeof req.setAdWillPlayMuted === 'function') req.setAdWillPlayMuted(false);
+  // Raise VAST load timeout — 8s kills wrapper chains before DFP resolves
+  req.vastLoadTimeout = 15000;
 
   fillByHour[hour].reqs++;
   try{ adsLoader.requestAds(req); startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT); }
@@ -1116,8 +1124,10 @@ function onLoaded(event){
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     rs.mimeTypes=['video/mp4','video/webm','video/3gpp','application/javascript'];
-    rs.loadVideoTimeout=WATERFALL_TIMEOUT||15000;
+    rs.loadVideoTimeout=20000; // raised from 8s — matches Trillboards player
     rs.enablePreloading=true;
+    rs.bitrate=2000; // explicit bitrate hint for CTV — matches Trillboards player
+    rs.restoreCustomPlaybackStateOnAdBreakComplete=true; // CTV playlist signal
     adsManager.updateAdsRenderingSettings(rs);
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
