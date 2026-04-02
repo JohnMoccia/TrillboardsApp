@@ -1111,7 +1111,7 @@ function reqNext(){
     if(typeof req.setAdWillAutoPlay === 'function') req.setAdWillAutoPlay(true);
     if(typeof req.setAdWillPlayMuted === 'function') req.setAdWillPlayMuted(false);
     req.vastLoadTimeout = 15000;
-    try{ adsLoader.requestAds(req); startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT); }
+    try{ adsLoader.requestAds(req); startWatchdog(Math.max(s.timeout_ms||0, WATERFALL_TIMEOUT)); }
     catch(e){ log('IMA request threw: '+e.message,'err'); if(srcStats[s.name])srcStats[s.name].err++; S.err++; rebuildLoader(); idx++; setTimeout(function(){reqNext();},300); }
   })
   .catch(function(e){
@@ -1383,7 +1383,8 @@ window.addEventListener('load',function(){
     var cv=parseFloat(sc('curb_cpm'));if(!isNaN(cv)&&cv>0){FLOOR_CPM=cv;var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+cv.toFixed(2);}
     var iv=parseInt(sc('curb_interval'));if(!isNaN(iv)&&iv>=5)INTERVAL=iv*1000;
     var hv=parseInt(sc('curb_hb'));if(!isNaN(hv)&&hv>=10)HB_INTERVAL_MS=hv*1000;
-    var tv=parseInt(sc('curb_timeout'));if(!isNaN(tv)&&tv>=3)WATERFALL_TIMEOUT=tv*1000;
+    // curb_timeout localStorage intentionally ignored — use KV remote config only
+    // var tv=parseInt(sc('curb_timeout'));if(!isNaN(tv)&&tv>=3)WATERFALL_TIMEOUT=tv*1000;
     var dv=sc('curb_did');if(dv&&dv.trim()){DEVICE_ID=dv.trim();HB_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/heartbeat';}
     var sv=sc('curb_sid');if(sv&&sv.trim())SCREEN_ID=sv.trim();
     var kv=sc('curb_key');if(kv&&kv.trim()){HB_KEY=kv.trim();API_KEY=kv.trim();}
