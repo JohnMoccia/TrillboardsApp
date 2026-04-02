@@ -1057,22 +1057,52 @@ function reqNext(){
   setNP('REQUESTING...',s.name+' priority '+s.priority);
   if(srcStats[s.name]) srcStats[s.name].req++;
 
-  var req = new google.ima.AdsRequest();
-  req.adTagUrl = vastUrl;
-  req.linearAdSlotWidth = window.innerWidth;
-  req.linearAdSlotHeight = window.innerHeight;
-  req.nonLinearAdSlotWidth = 0;
-  req.nonLinearAdSlotHeight = 0;
-  // CTV signals — match Trillboards native player settings for better DFP fill
-  if(typeof req.setContinuousPlayback === 'function') req.setContinuousPlayback(true);
-  if(typeof req.setAdWillAutoPlay === 'function') req.setAdWillAutoPlay(true);
-  if(typeof req.setAdWillPlayMuted === 'function') req.setAdWillPlayMuted(false);
-  // Raise VAST load timeout — 8s kills wrapper chains before DFP resolves
-  req.vastLoadTimeout = 15000;
-
   fillByHour[hour].reqs++;
-  try{ adsLoader.requestAds(req); startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT); }
-  catch(e){ log('IMA request threw: '+e.message,'err'); if(srcStats[s.name])srcStats[s.name].err++; S.err++; rebuildLoader(); idx++; setTimeout(function(){reqNext();},300); }
+
+  // ── CLIENT-DIRECT VAST FETCH ──────────────────────────────────────────────
+  // Match Trillboards native player behavior: fetch VAST XML server-side first
+  // then pass raw XML to IMA via adsResponse (not adTagUrl)
+  // This means IMA never makes its own fetch from the device — avoids IVT rejection
+  var proxyFetchUrl = 'https://trillboards-proxy.johnm-af2.workers.dev/proxy-vast?url=' + encodeURIComponent(s.vast_url
+    .replace(/%%CACHEBUSTER%%/g, Date.now()+''+Math.floor(Math.random()*99999))
+    .replace(/\[CACHEBUSTER\]/g, Date.now()+''+Math.floor(Math.random()*99999))
+    .replace(/rdid=69a076ad2ccbba67a5ba1c1e/g, 'rdid='+REAL_GAID)
+    .replace(/ifa=69a076ad2ccbba67a5ba1c1e/g, 'ifa='+REAL_GAID)
+    .replace(/idtype=dpid/g, 'idtype=adid')
+    .replace(/idtype=ppid/g, 'idtype=adid'));
+
+  log('Fetching VAST XML server-side: '+s.name,'info');
+  fetch(proxyFetchUrl)
+  .then(function(r){
+    if(!r.ok){ throw new Error('HTTP '+r.status); }
+    return r.text();
+  })
+  .then(function(vastXml){
+    if(!vastXml || vastXml.length < 50){
+      throw new Error('Empty VAST response ('+vastXml.length+' bytes)');
+    }
+    log('VAST XML fetched ('+vastXml.length+' bytes) — passing to IMA via adsResponse','ok');
+    var req = new google.ima.AdsRequest();
+    // Pass raw XML inline — IMA never fetches from device
+    req.adsResponse = vastXml;
+    req.linearAdSlotWidth = window.innerWidth;
+    req.linearAdSlotHeight = window.innerHeight;
+    req.nonLinearAdSlotWidth = 0;
+    req.nonLinearAdSlotHeight = 0;
+    if(typeof req.setContinuousPlayback === 'function') req.setContinuousPlayback(true);
+    if(typeof req.setAdWillAutoPlay === 'function') req.setAdWillAutoPlay(true);
+    if(typeof req.setAdWillPlayMuted === 'function') req.setAdWillPlayMuted(false);
+    req.vastLoadTimeout = 15000;
+    try{ adsLoader.requestAds(req); startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT); }
+    catch(e){ log('IMA request threw: '+e.message,'err'); if(srcStats[s.name])srcStats[s.name].err++; S.err++; rebuildLoader(); idx++; setTimeout(function(){reqNext();},300); }
+  })
+  .catch(function(e){
+    log('VAST fetch failed for '+s.name+': '+e.message+' — skipping','err');
+    if(srcStats[s.name])srcStats[s.name].err++;
+    S.err++; fillHistory.push(0);
+    rebuildLoader(); idx++;
+    setTimeout(function(){reqNext();}, 300);
+  });
 }
 
 function onLoaded(event){
