@@ -92,8 +92,8 @@
 </head>
 <body>
 <div id="idle-screen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;z-index:1"><div style="color:#222;font-size:32px;letter-spacing:8px;text-transform:uppercase">CURB</div></div>
-<!-- Trillboards embed iframe — shown fullscreen when ad plays -->
-<iframe id="ad-frame" src="about:blank" allow="autoplay; fullscreen; geolocation" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:5000"></iframe>
+<!-- Trillboards embed iframe — injected dynamically in embed mode only -->
+<div id="ad-frame-container"></div>
 <div id="ad-container" style="position:fixed;top:0;left:0;width:100%;height:100%;display:none;z-index:10">
   <video id="content-video" playsinline muted poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
   <div id="ad-display"></div>
@@ -320,11 +320,10 @@ function applyRemoteConfig(cfg) {
     log('Player mode: '+PLAYER_MODE,'ok');
     var badge=document.getElementById('player-mode-badge');
     if(badge){badge.textContent='MODE: '+PLAYER_MODE.toUpperCase();badge.style.color=PLAYER_MODE==='native'?'#0f0':'#4af';}
-    // In native mode kill the embed iframe — only one player at a time
-    // Prevents their overlay JS from running alongside our IMA player
+    // In native mode ensure embed container is empty — only one player at a time
     if(PLAYER_MODE==='native'){
-      var f=document.getElementById('ad-frame');
-      if(f){ f.src='about:blank'; f.style.display='none'; }
+      var fc=document.getElementById('ad-frame-container');
+      if(fc) fc.innerHTML='';
     }
   }
   if (!cfg) return;
@@ -1274,9 +1273,15 @@ function showAdFrame() {
     CurbBridge.showAd();
   } else {
     log('CurbBridge not available — using iframe fallback', 'warn');
-    var frame = document.getElementById('ad-frame');
+    // Create iframe fresh each time — never exists in DOM in native mode
+    var container = document.getElementById('ad-frame-container');
+    var frame = document.createElement('iframe');
+    frame.id = 'ad-frame';
+    frame.allow = 'autoplay; fullscreen; geolocation';
+    frame.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:5000';
+    container.innerHTML = '';
+    container.appendChild(frame);
     frame.src = EMBED_URL + '&t=' + Date.now();
-    frame.style.display = 'block';
     document.getElementById('idle-screen').style.display = 'none';
     adWatchdog = setTimeout(function(){
       closeAdFrame('watchdog', 0, false);
@@ -1331,9 +1336,8 @@ function closeAdFrame(source, durationSec, completed) {
   if(!adPlaying) return;
   clearTimeout(adWatchdog);
   adPlaying = false;
-  var frame = document.getElementById('ad-frame');
-  frame.style.display = 'none';
-  frame.src = '';
+  var container = document.getElementById('ad-frame-container');
+  if(container) container.innerHTML = ''; // destroy iframe completely
   document.getElementById('idle-screen').style.display = 'flex';
   S.fills++; S.src = source; updStats();
   setNP('IDLE', 'Next ad in '+Math.round(INTERVAL/1000)+'s');
