@@ -266,6 +266,28 @@ var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
 // 'native' = our own IMA player via earner API (full control, no their player)
 // Change via remote config: set player_mode in Cloudflare KV
 var PLAYER_MODE = 'embed'; // switched back to Trillboards native player — SSP fill issues with custom IMA integration
+
+// ── BLOCK TRILLBOARDS EMBED IN NATIVE MODE ───────────────────────────────
+// Intercept fetch and XHR to screen.trillboards.com so their player cannot
+// load alongside ours when in native mode — one player only
+(function(){
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts){
+    if(PLAYER_MODE === 'native' && typeof url === 'string' && url.indexOf('screen.trillboards.com') >= 0){
+      console.log('[Curb] Blocked embed fetch in native mode: '+String(url).substring(0,80));
+      return Promise.reject(new TypeError('Blocked in native mode'));
+    }
+    return _fetch.apply(this, arguments);
+  };
+  var _xhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url){
+    if(PLAYER_MODE === 'native' && typeof url === 'string' && url.indexOf('screen.trillboards.com') >= 0){
+      console.log('[Curb] Blocked embed XHR in native mode: '+String(url).substring(0,80));
+      return;
+    }
+    return _xhrOpen.apply(this, arguments);
+  };
+})();
 var VAST_CONFIG_URL = 'https://api.trillboards.com/v1/partner/vast/config';
 var vastConfig = null;       // cached /vast/config response
 var vastConfigTs = 0;        // when we last fetched it
@@ -320,6 +342,10 @@ function applyRemoteConfig(cfg) {
     log('Player mode: '+PLAYER_MODE,'ok');
     var badge=document.getElementById('player-mode-badge');
     if(badge){badge.textContent='MODE: '+PLAYER_MODE.toUpperCase();badge.style.color=PLAYER_MODE==='native'?'#0f0':'#4af';}
+    // Tell Java the player mode — Java will create or destroy the embed WebView accordingly
+    if(typeof CurbBridge !== 'undefined' && CurbBridge.setPlayerMode){
+      CurbBridge.setPlayerMode(PLAYER_MODE);
+    }
     // In native mode ensure embed container is empty — only one player at a time
     if(PLAYER_MODE==='native'){
       var fc=document.getElementById('ad-frame-container');
