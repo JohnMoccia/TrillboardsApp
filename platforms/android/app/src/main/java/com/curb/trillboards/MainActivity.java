@@ -3,6 +3,7 @@ package com.curb.trillboards;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
+import android.os.PowerManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -66,7 +67,31 @@ public class MainActivity extends CordovaActivity {
             startService(serviceIntent);
         }
 
+        // Request battery optimization exemption — prevents Samsung from killing
+        // the foreground service during extended unattended operation
+        requestBatteryOptimizationExemption();
+
         loadUrl(launchUrl);
+    }
+
+    // Request battery optimization exemption so Android/Samsung doesn't kill us
+    private void requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                    android.content.Intent intent = new android.content.Intent(
+                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                    Log.i(TAG, "Requesting battery optimization exemption");
+                } else {
+                    Log.i(TAG, "Already exempt from battery optimization");
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Battery optimization request failed: " + e.getMessage());
+            }
+        }
     }
 
     @Override
