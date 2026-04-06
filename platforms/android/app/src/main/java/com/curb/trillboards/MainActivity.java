@@ -265,6 +265,17 @@ public class MainActivity extends CordovaActivity {
 
         adWebView.setVisibility(android.view.View.VISIBLE);
         adWebView.bringToFront();
+        // Hide navigation bar and status bar — fills full screen, fixes audio-only issue
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            adWebView.setSystemUiVisibility(
+                android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            );
+        }
 
         adWebView.evaluateJavascript("window._cs=false;window._cc=false;window._cn=false;", null);
 
