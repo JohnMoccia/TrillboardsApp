@@ -399,7 +399,7 @@ public class MainActivity extends CordovaActivity {
                 try {
                     if (result == null || result.equals("null")) return;
                     // Strip JS string quotes
-                    String json = result.replaceAll("^"|"$", "").replace("\"", """);
+                    String json = result.startsWith("\"") ? result.substring(1, result.length()-1).replace("\\\"", "\"") : result;
                     JSONObject detail = new JSONObject(json);
                     String adSource  = detail.optString("adSource",  "unknown");
                     String adType    = detail.optString("adType",    "unknown");
