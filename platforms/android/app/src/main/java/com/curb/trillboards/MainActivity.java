@@ -379,13 +379,13 @@ public class MainActivity extends CordovaActivity {
             "  }catch(e){console.log('[CurbAds] checkAndShowAds error: '+e.message);}" +
             "})(1)", null);
 
-        // Safety watchdog — 2 min max, in case OverlayEventBus events don't fire
+        // Safety watchdog — 5 min max, gives content cache time to play
         // completed=false — only real ad:completed events count as fills
         adWatchdog = () -> {
             Log.w(TAG, "Safety watchdog fired — no ad:completed received, not counting as fill");
             dismissAdOverlay(false, "no_fill", 0);
         };
-        mainHandler.postDelayed(adWatchdog, 120000);
+        mainHandler.postDelayed(adWatchdog, 300000);
     }
 
     private void notifyJsNoFill() {
