@@ -3,10 +3,10 @@ package com.curb.trillboards;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
-import android.os.PowerManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
@@ -32,23 +32,23 @@ import java.util.TimeZone;
 
 public class MainActivity extends CordovaActivity {
 
-    private static final String TAG        = "CurbAds";
-    private static final String DEVICE_ID  = "P_691cbdd4b3117cb1b692f4ae";
-    private static final String SCREEN_ID  = "69a076ad2ccbba67a5ba1c1e";
-    private static final String KV_URL     = "https://trillboards-proxy.johnm-af2.workers.dev/log-impression";
-    private static final String KV_SECRET  = "curb2026";
-    private static final String EMBED_URL  = "https://screen.trillboards.com?fp=" + DEVICE_ID;
+    private static final String TAG       = "CurbAds";
+    private static final String DEVICE_ID = "P_691cbdd4b3117cb1b692f4ae";
+    private static final String SCREEN_ID = "69a076ad2ccbba67a5ba1c1e";
+    private static final String KV_URL    = "https://trillboards-proxy.johnm-af2.workers.dev/log-impression";
+    private static final String KV_SECRET = "curb2026";
+    private static final String EMBED_URL = "https://screen.trillboards.com?fp=" + DEVICE_ID;
 
+    // WebView is ALWAYS persistent — never destroyed (wiping it kills IndexedDB content cache)
     private WebView  adWebView   = null;
     private boolean  adShowing   = false;
     private Handler  mainHandler = new Handler(Looper.getMainLooper());
     private Runnable adWatchdog  = null;
 
-    // Player mode — set by JS via CurbBridge.setPlayerMode()
-    // Defaults to embed for safety — native mode must be explicitly set
-    private String playerMode = "embed";
+    // SOV tracking — set by OverlayEventBus events
+    private boolean programmaticFillThisCycle = false;
+    private String  adSourceThisCycle         = "content_cache";
 
-    // Impression queue — stored locally, batch sent on app resume
     private final List<JSONObject> pendingImpressions = new ArrayList<>();
 
     @Override
@@ -67,14 +67,10 @@ public class MainActivity extends CordovaActivity {
             startService(serviceIntent);
         }
 
-        // Request battery optimization exemption — prevents Samsung from killing
-        // the foreground service during extended unattended operation
         requestBatteryOptimizationExemption();
-
         loadUrl(launchUrl);
     }
 
-    // Request battery optimization exemption so Android/Samsung doesn't kill us
     private void requestBatteryOptimizationExemption() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
@@ -102,35 +98,27 @@ public class MainActivity extends CordovaActivity {
             wv.addJavascriptInterface(new CurbBridge(), "CurbBridge");
             Log.i(TAG, "CurbBridge injected");
         }
-        // Pre-warm deferred — JS will call setPlayerMode first, then we decide
-        // whether to create the ad WebView based on player mode
-        mainHandler.postDelayed(() -> {
-            if ("embed".equals(playerMode)) {
-                createAdWebView();
-            } else {
-                Log.i(TAG, "Native mode — skipping embed WebView creation");
-            }
-        }, 3000);
+        // Always create the WebView — keep persistent to preserve IndexedDB content cache
+        mainHandler.postDelayed(() -> createAdWebView(), 3000);
     }
 
     @Override
     public void onResume() {
         super.onResume();
         this.appView.handleResume(true);
-        // Flush any pending impressions when app comes back into focus
         if (!pendingImpressions.isEmpty()) {
             Log.i(TAG, "App resumed — flushing " + pendingImpressions.size() + " pending impressions");
             flushPendingImpressions();
         }
     }
-    @Override public void onPause()  { super.onPause();  this.appView.handlePause(true);  }
+    @Override public void onPause()   { super.onPause();  this.appView.handlePause(true); }
     @Override public void onDestroy() {
         Intent si = new Intent(this, AdService.class);
         stopService(si);
         super.onDestroy();
     }
 
-    // ── Bridge exposed to our index.html ─────────────────────────────────────
+    // ── CurbBridge — exposed to index.html ───────────────────────────────────
     public class CurbBridge {
 
         @JavascriptInterface
@@ -142,35 +130,18 @@ public class MainActivity extends CordovaActivity {
         @JavascriptInterface
         public void closeAd() {
             Log.i(TAG, "closeAd() called from JS");
-            mainHandler.post(() -> dismissAdOverlay(false));
+            mainHandler.post(() -> dismissAdOverlay(false, "manual", 0));
         }
 
-        // Called by index.html as soon as player mode is known from KV config
-        // Allows Java to decide whether to create the embed WebView
         @JavascriptInterface
         public void setPlayerMode(String mode) {
-            Log.i(TAG, "setPlayerMode: " + mode);
-            playerMode = mode;
-            mainHandler.post(() -> {
-                if ("embed".equals(mode)) {
-                    // Embed mode — ensure WebView exists
-                    if (adWebView == null) createAdWebView();
-                } else {
-                    // Native mode — destroy embed WebView if it exists
-                    if (adWebView != null) {
-                        Log.i(TAG, "Native mode — destroying embed WebView");
-                        adWebView.stopLoading();
-                        adWebView.loadUrl("about:blank");
-                        adWebView.setVisibility(android.view.View.GONE);
-                        adWebView.destroy();
-                        adWebView = null;
-                    }
-                }
-            });
+            // Mode switching no longer destroys WebView — content cache must be preserved
+            // In both modes WebView stays alive, just shown/hidden differently
+            Log.i(TAG, "setPlayerMode: " + mode + " (WebView always persistent)");
         }
     }
 
-    // ── Create persistent ad WebView (called once at startup) ──────────────
+    // ── Create persistent ad WebView ─────────────────────────────────────────
     private void createAdWebView() {
         if (adWebView != null) return;
         Log.i(TAG, "Creating persistent ad WebView");
@@ -196,16 +167,20 @@ public class MainActivity extends CordovaActivity {
             ws.setAllowFileAccessFromFileURLs(true);
         }
 
-        adWebView.addJavascriptInterface(new TrillboardsBridge(), "TrillboardsBridge");
+        // Inject OverlayEventBus bridge — Sneh's official event API
+        adWebView.addJavascriptInterface(new OverlayEventBridge(), "OverlayEventBridge");
         adWebView.setWebChromeClient(new WebChromeClient());
         adWebView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                Log.i(TAG, "Ad overlay page loaded: " + url);
+                Log.i(TAG, "Ad WebView loaded: " + url);
+                // Subscribe to OverlayEventBus after page loads
+                mainHandler.postDelayed(() -> subscribeToOverlayEvents(view), 2000);
             }
 
             @Override
-            public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest request) {
+            public android.webkit.WebResourceResponse shouldInterceptRequest(
+                    WebView view, android.webkit.WebResourceRequest request) {
                 String url = request.getUrl().toString();
                 if (url.contains("check-screen") || url.contains("alot-advertisement-list")) {
                     try {
@@ -223,10 +198,7 @@ public class MainActivity extends CordovaActivity {
                         String rawType = conn.getContentType();
                         final String contentType = (rawType != null) ? rawType : "application/json";
                         int status = conn.getResponseCode();
-                        Log.i(TAG, "Proxied " + url.substring(url.lastIndexOf("/")+1) + " → " + status);
-                        if (url.contains("check-screen") && status == 200) {
-                            mainHandler.postDelayed(() -> injectConsoleInterceptor(view), 1500);
-                        }
+                        Log.i(TAG, "Proxied " + url.substring(url.lastIndexOf("/") + 1) + " → " + status);
                         java.io.InputStream is = status >= 200 && status < 300
                             ? conn.getInputStream() : conn.getErrorStream();
                         return new android.webkit.WebResourceResponse(contentType, "UTF-8", status,
@@ -249,23 +221,128 @@ public class MainActivity extends CordovaActivity {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         );
-        addContentView(adWebView, params);
+        android.view.ViewGroup decorView = (android.view.ViewGroup) getWindow().getDecorView();
+        decorView.addView(adWebView, params);
         adWebView.loadUrl(EMBED_URL);
-        Log.i(TAG, "Ad WebView loaded — will persist across cycles");
-        mainHandler.postDelayed(() -> injectConsoleInterceptor(adWebView), 4000);
+        Log.i(TAG, "Ad WebView loaded — persistent, IndexedDB content cache preserved");
     }
 
-    // ── Launch ad overlay — just show the persistent WebView ─────────────────
+    // ── Subscribe to Sneh's OverlayEventBus ──────────────────────────────────
+    // This is the official API — replaces the poll-based video detection
+    private void subscribeToOverlayEvents(WebView view) {
+        String js =
+            "(function() {" +
+            "  try {" +
+            "    if (!window.OverlayEventBus) {" +
+            "      console.log('[CurbAds] OverlayEventBus not ready — retrying');" +
+            "      setTimeout(arguments.callee, 1000);" +
+            "      return;" +
+            "    }" +
+            "    window.OverlayEventBus.on('ad:started', function(d) {" +
+            "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:started'," +
+            "        source:d&&d.source?d.source:'unknown'," +
+            "        isProgrammatic:d&&d.isProgrammatic?true:false}));" +
+            "    });" +
+            "    window.OverlayEventBus.on('ad:ended', function(d) {" +
+            "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:ended'," +
+            "        source:d&&d.source?d.source:'unknown'," +
+            "        duration:d&&d.duration?d.duration:30," +
+            "        isProgrammatic:d&&d.isProgrammatic?true:false}));" +
+            "    });" +
+            "    window.OverlayEventBus.on('ad:error', function(d) {" +
+            "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:error'," +
+            "        error:d&&d.error?d.error:''," +
+            "        waterfallExhausted:d&&d.waterfallExhausted?true:false}));" +
+            "    });" +
+            "    console.log('[CurbAds] OverlayEventBus subscribed');" +
+            "  } catch(e) {" +
+            "    console.log('[CurbAds] OverlayEventBus subscribe failed: ' + e.message);" +
+            "  }" +
+            "})();";
+        view.evaluateJavascript(js, null);
+        Log.i(TAG, "OverlayEventBus subscription injected");
+    }
+
+    // ── OverlayEventBridge — receives events from OverlayEventBus ────────────
+    public class OverlayEventBridge {
+
+        @JavascriptInterface
+        public void onEvent(String eventJson) {
+            try {
+                JSONObject evt = new JSONObject(eventJson);
+                String type = evt.optString("type", "");
+                Log.i(TAG, "OverlayEvent: " + eventJson);
+
+                switch (type) {
+                    case "ad:started":
+                        programmaticFillThisCycle = evt.optBoolean("isProgrammatic", false);
+                        adSourceThisCycle = evt.optString("source", "unknown");
+                        Log.i(TAG, "AD STARTED — source:" + adSourceThisCycle
+                            + " programmatic:" + programmaticFillThisCycle);
+                        // Cancel 2-min safety watchdog, start 45s completion watchdog
+                        if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
+                        adWatchdog = () -> {
+                            Log.w(TAG, "Ad completion watchdog — dismissing");
+                            dismissAdOverlay(true, adSourceThisCycle, 30);
+                        };
+                        mainHandler.postDelayed(adWatchdog, 45000);
+                        // Query Sneh's API for full ad detail — adSource, adType, currentAdId
+                        queryAdDetail();
+                        // Tell our JS ad started
+                        if (appView != null) {
+                            runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                                "adStartedThisCycle=true;", null));
+                        }
+                        break;
+
+                    case "ad:ended":
+                        int dur = evt.optInt("duration", 30);
+                        String src = evt.optString("source", adSourceThisCycle);
+                        Log.i(TAG, "AD ENDED — source:" + src + " duration:" + dur + "s");
+                        if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
+                        final int durFinal = dur;
+                        final String srcFinal = src;
+                        mainHandler.post(() -> dismissAdOverlay(true, srcFinal, durFinal));
+                        break;
+
+                    case "ad:error":
+                        boolean exhausted = evt.optBoolean("waterfallExhausted", false);
+                        String error = evt.optString("error", "");
+                        Log.i(TAG, "AD ERROR — " + error + " exhausted:" + exhausted);
+                        if (exhausted) {
+                            // Waterfall exhausted — content cache will take over in ~1s
+                            // Don't dismiss — wait for ad:started from cache
+                            // Set a fallback watchdog in case cache also fails
+                            if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
+                            adWatchdog = () -> {
+                                Log.w(TAG, "Post-exhaustion watchdog — no cache fill, dismissing");
+                                // Log as no-fill request
+                                notifyJsNoFill();
+                                dismissAdOverlay(false, "no_fill", 0);
+                            };
+                            mainHandler.postDelayed(adWatchdog, 15000);
+                        }
+                        break;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "OverlayEventBridge error: " + e.getMessage());
+            }
+        }
+    }
+
+    // ── Launch ad overlay — show WebView + trigger checkAndShowAds ───────────
     private void launchAdOverlay() {
         if (adShowing) return;
         adShowing = true;
+        programmaticFillThisCycle = false;
+        adSourceThisCycle = "content_cache";
         Log.i(TAG, "Showing ad overlay");
 
         if (adWebView == null) createAdWebView();
 
         adWebView.setVisibility(android.view.View.VISIBLE);
         adWebView.bringToFront();
-        // Hide navigation bar and status bar — fills full screen, fixes audio-only issue
+        // Immersive fullscreen — hides nav bar, fixes audio-only issue
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             adWebView.setSystemUiVisibility(
                 android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -277,159 +354,100 @@ public class MainActivity extends CordovaActivity {
             );
         }
 
-        adWebView.evaluateJavascript("window._cs=false;window._cc=false;window._cn=false;", null);
-
+        // Use Sneh's official trigger API — checkAndShowAds(true) = force immediate play
         adWebView.evaluateJavascript(
             "(function(){" +
             "  try{" +
-            "    var vids=document.querySelectorAll('video');" +
-            "    for(var i=0;i<vids.length;i++){" +
-            "      if(vids[i].paused) vids[i].play().catch(function(){});" +
+            "    if(window.checkAndShowAds){" +
+            "      window.checkAndShowAds(true);" +
+            "      console.log('[CurbAds] checkAndShowAds(true) called');" +
+            "    } else {" +
+            "      console.log('[CurbAds] checkAndShowAds not available yet');" +
             "    }" +
-            "  }catch(e){}" +
+            "  }catch(e){console.log('[CurbAds] checkAndShowAds error: '+e.message);}" +
             "})()", null);
 
+        // Safety watchdog — 2 min max, in case OverlayEventBus events don't fire
         adWatchdog = () -> {
-            Log.w(TAG, "Ad watchdog fired — treating as completed (ad played)");
-            dismissAdOverlay(true);
+            Log.w(TAG, "Safety watchdog fired — treating as completed");
+            dismissAdOverlay(true, adSourceThisCycle, 30);
         };
         mainHandler.postDelayed(adWatchdog, 120000);
     }
 
-    // ── Inject JS console interceptor to detect ad events ────────────────────
-    private void injectConsoleInterceptor(WebView view) {
-        String js =
-            "window._cs=false;window._cc=false;window._cn=false;\n" +
-            "if(window._pollTimer)clearInterval(window._pollTimer);\n" +
-            "window._pollTimer=setInterval(function(){\n" +
-            "  try{\n" +
-            "    var vids=[];\n" +
-            "    vids=vids.concat(Array.from(document.querySelectorAll('video')));\n" +
-            "    try{var frames=document.querySelectorAll('iframe');for(var i=0;i<frames.length;i++){try{vids=vids.concat(Array.from(frames[i].contentDocument.querySelectorAll('video')));}catch(e){}}}catch(e){}\n" +
-            "    var playing=vids.some(function(v){return !v.paused&&!v.ended&&v.currentTime>0&&v.readyState>2;});\n" +
-            "    var ended=vids.some(function(v){return v.ended;});\n" +
-            "    if(playing&&!window._cs){window._cs=true;try{CurbAdEvents.onAdStarted();}catch(e){}}\n" +
-            "    if(ended&&window._cs&&!window._cc){window._cc=true;window._cs=false;try{CurbAdEvents.onAdComplete();}catch(e){}}\n" +
-            "  }catch(e){}\n" +
-            "},1000);\n";
-
-        view.addJavascriptInterface(new AdEventsBridge(), "CurbAdEvents");
-        view.evaluateJavascript(js, null);
-        Log.i(TAG, "Console interceptor injected");
-    }
-
-    // ── Ad events from injected JS ────────────────────────────────────────────
-    public class AdEventsBridge {
-
-        @JavascriptInterface
-        public void onAdStarted() {
-            Log.i(TAG, "AD STARTED via console intercept");
-            if (adWatchdog != null) {
-                mainHandler.removeCallbacks(adWatchdog);
-                adWatchdog = () -> {
-                    Log.w(TAG, "Ad completion watchdog — dismissing");
-                    dismissAdOverlay(true);
-                };
-                mainHandler.postDelayed(adWatchdog, 45000);
-            }
-            if (appView != null) {
-                runOnUiThread(() -> appView.getEngine().evaluateJavascript(
-                    "adStartedThisCycle=true;", null));
-            }
-        }
-
-        @JavascriptInterface
-        public void onAdComplete() {
-            Log.i(TAG, "AD COMPLETE via console intercept");
-            if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-            mainHandler.post(() -> dismissAdOverlay(true));
-        }
-
-        @JavascriptInterface
-        public void onNoFill() {
-            Log.i(TAG, "NO FILL via console — fallback cache loads in ~1s");
-            if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-            adWatchdog = () -> {
-                Log.w(TAG, "Post-no-fill watchdog — dismissing overlay");
-                dismissAdOverlay(false);
-            };
-            mainHandler.postDelayed(adWatchdog, 15000);
+    private void notifyJsNoFill() {
+        if (appView != null) {
+            runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                "if(typeof onAdOverlayClosed==='function') onAdOverlayClosed(false);", null));
         }
     }
 
-    // ── Trillboards SDK bridge ────────────────────────────────────────────────
-    public class TrillboardsBridge {
-
-        @JavascriptInterface
-        public void onEvent(String eventJson) {
-            try {
-                Log.i(TAG, "TrillboardsBridge: " + eventJson);
-                JSONObject evt  = new JSONObject(eventJson);
-                String type     = evt.optString("event", "");
-                JSONObject data = evt.optJSONObject("data");
-                if (data == null) data = new JSONObject();
-
-                switch (type) {
-                    case "programmatic_started":
-                    case "ad_started":
-                        Log.i(TAG, "AD STARTED — " + data.optString("source","?"));
-                        if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-                        break;
-
-                    case "programmatic_ended":
-                    case "ad_ended":
-                        int dur = data.optInt("duration", 30);
-                        String src = data.optString("source", "trillboards");
-                        Log.i(TAG, "AD ENDED — " + src + " " + dur + "s");
-                        if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-                        mainHandler.post(() -> dismissAdOverlay(true));
-                        break;
-
-                    case "programmatic_no_fill":
-                        Log.i(TAG, "NO FILL — waiting for fallback cached content");
-                        if (adWatchdog != null) {
-                            mainHandler.removeCallbacks(adWatchdog);
-                            adWatchdog = () -> {
-                                Log.w(TAG, "No fill watchdog — dismissing overlay");
-                                dismissAdOverlay(false);
-                            };
-                            mainHandler.postDelayed(adWatchdog, 15000);
-                        }
-                        break;
+    // ── Query ad detail from Sneh's API ─────────────────────────────────────
+    // Gets adSource (adipolo/vidverto/etc), adType (ima/paid/self_promo), currentAdId
+    private void queryAdDetail() {
+        if (adWebView == null) return;
+        mainHandler.post(() -> adWebView.evaluateJavascript(
+            "JSON.stringify({" +
+            "  adSource: window.minimalAdvertisementOverlay && window.minimalAdvertisementOverlay.imaAdManager" +
+            "    ? window.minimalAdvertisementOverlay.imaAdManager.adSource : null," +
+            "  adType: window.minimalAdvertisementOverlay && window.minimalAdvertisementOverlay.imaAdManager" +
+            "    ? window.minimalAdvertisementOverlay.imaAdManager.adType : null," +
+            "  currentAdId: window.minimalAdvertisementOverlay && window.minimalAdvertisementOverlay.imaAdManager" +
+            "    ? window.minimalAdvertisementOverlay.imaAdManager.currentAdId : null" +
+            "})",
+            result -> {
+                try {
+                    if (result == null || result.equals("null")) return;
+                    // Strip JS string quotes
+                    String json = result.replaceAll("^"|"$", "").replace("\"", """);
+                    JSONObject detail = new JSONObject(json);
+                    String adSource  = detail.optString("adSource",  "unknown");
+                    String adType    = detail.optString("adType",    "unknown");
+                    String currentAdId = detail.optString("currentAdId", "");
+                    adSourceThisCycle = adSource.isEmpty() ? adSourceThisCycle : adSource;
+                    Log.i(TAG, "Ad detail — adSource:" + adSource
+                        + " adType:" + adType + " adId:" + currentAdId);
+                    // Notify our JS with full detail for KV tracking
+                    if (appView != null) {
+                        final String src = adSource;
+                        final String typ = adType;
+                        final String aid = currentAdId;
+                        runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                            "if(typeof onAdDetail==='function') onAdDetail('" + src
+                                + "','" + typ + "','" + aid + "');", null));
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "queryAdDetail parse error: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "TrillboardsBridge error: " + e.getMessage());
             }
-        }
+        ));
     }
 
     // ── Dismiss overlay ───────────────────────────────────────────────────────
-    private void dismissAdOverlay(boolean completed) {
+    private void dismissAdOverlay(boolean completed, String source, int durationSec) {
         if (!adShowing) return;
         adShowing = false;
-        Log.i(TAG, "Hiding ad overlay completed=" + completed);
+        Log.i(TAG, "Hiding ad overlay completed=" + completed + " source=" + source);
 
         if (adWebView != null) {
+            // Pause videos but DON'T destroy WebView — content cache must stay alive
             adWebView.evaluateJavascript(
-                "(function(){" +
-                "  try{" +
-                "    var vids=document.querySelectorAll('video');" +
-                "    for(var i=0;i<vids.length;i++){vids[i].pause();}" +
-                "    if(window.__overlay && window.__overlay.pause) window.__overlay.pause();" +
-                "    if(window.overlayInstance && window.overlayInstance.pause) window.overlayInstance.pause();" +
-                "  }catch(e){}" +
-                "})()", null);
+                "(function(){try{" +
+                "  var vids=document.querySelectorAll('video');" +
+                "  for(var i=0;i<vids.length;i++){vids[i].pause();}" +
+                "}catch(e){}})()", null);
             adWebView.setVisibility(android.view.View.GONE);
         }
 
+        // Notify our JS with source info for accurate KV tracking
         if (this.appView != null) {
             final boolean comp = completed;
-            runOnUiThread(() -> {
-                this.appView.getEngine().evaluateJavascript(
-                    "if(typeof onAdOverlayClosed==='function') onAdOverlayClosed(" + comp + ");",
-                    null
-                );
-            });
+            final String src = source;
+            final int dur = durationSec;
+            runOnUiThread(() -> this.appView.getEngine().evaluateJavascript(
+                "if(typeof onAdOverlayClosed==='function') onAdOverlayClosed(" + comp
+                    + ",'" + src + "'," + dur + ");",
+                null));
         }
     }
 
@@ -449,10 +467,7 @@ public class MainActivity extends CordovaActivity {
             body.put("timestamp",   sdf.format(new Date()));
 
             if (completed && "ad_ended".equals(type)) {
-                synchronized (pendingImpressions) {
-                    pendingImpressions.add(body);
-                }
-                Log.i(TAG, "Queued completed impression — total pending: " + pendingImpressions.size());
+                synchronized (pendingImpressions) { pendingImpressions.add(body); }
             } else {
                 sendToKV(body);
             }
@@ -487,9 +502,6 @@ public class MainActivity extends CordovaActivity {
             toSend = new ArrayList<>(pendingImpressions);
             pendingImpressions.clear();
         }
-        Log.i(TAG, "Flushing " + toSend.size() + " impressions to KV");
-        for (JSONObject imp : toSend) {
-            sendToKV(imp);
-        }
+        for (JSONObject imp : toSend) { sendToKV(imp); }
     }
 }
