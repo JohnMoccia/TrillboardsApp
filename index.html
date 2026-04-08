@@ -549,7 +549,15 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
       if(txt&&txt.length>0){log('RESP: '+txt.substring(0,300),'resp');}
       addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
       addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
-      if(ok){try{var rd=JSON.parse(txt);var impId=(rd.data&&rd.data.proofs&&rd.data.proofs[0])?rd.data.proofs[0].impression_id:'';logToKV(adid,durationSec,completed,impId);}catch(e2){logToKV(adid,durationSec,completed,'');}}
+      if(ok){try{var rd=JSON.parse(txt);var impId=(rd.data&&rd.data.proofs&&rd.data.proofs[0])?rd.data.proofs[0].impression_id:'';
+        // If Trillboards processed the impression (proof returned), treat as completed
+        // This handles the case where ad:completed doesn't fire from OverlayEventBus (?v=dev bug)
+        var trillConfirmed = rd.data&&rd.data.processed>=1;
+        if(trillConfirmed && !completed){
+          log('Trillboards proof received — treating as completed (OverlayEventBus ad:completed bug)','ok');
+          completed = true;
+        }
+        logToKV(adid,durationSec,completed,impId);}catch(e2){logToKV(adid,durationSec,completed,'');}}
       else{logErrorToKV(adid,durationSec,completed,status,txt);if(attempt<3){var delay=[0,2000,4000,8000][attempt+1]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}}
     });
   }).catch(function(e){
