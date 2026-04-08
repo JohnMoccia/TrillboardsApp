@@ -1435,7 +1435,7 @@ window.addEventListener('load',function(){
   updServerIntervalDisplay();
   pollConfig();
   // Start embed-based ad loop
-  setTimeout(showAdFrame, 2000);
+  setTimeout(showAdFrame, 6000); // Delay to ensure screen.trillboards.com WebView + OverlayEventBus are ready
   var _hbTimer=null;
   function reschedHeartbeat(ms){clearInterval(_hbTimer);_hbTimer=setInterval(sendHeartbeat,ms||HB_INTERVAL_MS);}
   sendHeartbeat();
