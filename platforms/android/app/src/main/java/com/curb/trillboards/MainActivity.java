@@ -238,6 +238,11 @@ public class MainActivity extends CordovaActivity {
             "      setTimeout(arguments.callee, 1000);" +
             "      return;" +
             "    }" +
+            "    // Debug: log available window functions to find checkAndShowAds" +
+            "    var fns = Object.keys(window).filter(function(k){" +
+            "      return typeof window[k]==='function' && (k.toLowerCase().includes('ad')||k.toLowerCase().includes('show')||k.toLowerCase().includes('check')||k.toLowerCase().includes('play'));" +
+            "    });" +
+            "    console.log('[CurbAds] Available ad functions: ' + JSON.stringify(fns));" +
             "    window.OverlayEventBus.on('ad:started', function(d) {" +
             "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:started'," +
             "        source:d&&d.source?d.source:'unknown'," +
