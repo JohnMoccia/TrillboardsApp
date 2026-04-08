@@ -355,17 +355,21 @@ public class MainActivity extends CordovaActivity {
         }
 
         // Use Sneh's official trigger API — checkAndShowAds(true) = force immediate play
+        // Retry up to 5 times with 1s delay if not ready yet
         adWebView.evaluateJavascript(
-            "(function(){" +
+            "(function tryTrigger(attempt){" +
             "  try{" +
             "    if(window.checkAndShowAds){" +
             "      window.checkAndShowAds(true);" +
-            "      console.log('[CurbAds] checkAndShowAds(true) called');" +
+            "      console.log('[CurbAds] checkAndShowAds(true) called (attempt '+attempt+')');" +
+            "    } else if(attempt < 5){" +
+            "      console.log('[CurbAds] checkAndShowAds not ready — retrying in 1s (attempt '+attempt+')');" +
+            "      setTimeout(function(){ tryTrigger(attempt+1); }, 1000);" +
             "    } else {" +
-            "      console.log('[CurbAds] checkAndShowAds not available yet');" +
+            "      console.log('[CurbAds] checkAndShowAds unavailable after 5 attempts — player auto-cycling');" +
             "    }" +
             "  }catch(e){console.log('[CurbAds] checkAndShowAds error: '+e.message);}" +
-            "})()", null);
+            "})(1)", null);
 
         // Safety watchdog — 2 min max, in case OverlayEventBus events don't fire
         adWatchdog = () -> {
