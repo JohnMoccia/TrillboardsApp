@@ -384,9 +384,10 @@ public class MainActivity extends CordovaActivity {
             "})(1)", null);
 
         // Safety watchdog — 2 min max, in case OverlayEventBus events don't fire
+        // completed=false — only real ad:completed events count as fills
         adWatchdog = () -> {
-            Log.w(TAG, "Safety watchdog fired — treating as completed");
-            dismissAdOverlay(true, adSourceThisCycle, 30);
+            Log.w(TAG, "Safety watchdog fired — no ad:completed received, not counting as fill");
+            dismissAdOverlay(false, "no_fill", 0);
         };
         mainHandler.postDelayed(adWatchdog, 120000);
     }
