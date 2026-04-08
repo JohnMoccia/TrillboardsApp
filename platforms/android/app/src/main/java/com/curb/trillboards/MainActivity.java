@@ -244,11 +244,11 @@ public class MainActivity extends CordovaActivity {
             "        source:d&&d.source?d.source:'unknown'," +
             "        isProgrammatic:d&&d.isProgrammatic?true:false}));" +
             "    });" +
-            "    window.OverlayEventBus.on('ad:ended', function(d) {" +
-            "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:ended'," +
-            "        source:d&&d.source?d.source:'unknown'," +
-            "        duration:d&&d.duration?d.duration:30," +
-            "        isProgrammatic:d&&d.isProgrammatic?true:false}));" +
+            "    window.OverlayEventBus.on('ad:completed', function(d) {" +
+            "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:completed'," +
+            "        adId:d&&d.adId?d.adId:''," +
+            "        adType:d&&d.adType?d.adType:'unknown'," +
+            "        duration:d&&d.duration?d.duration:30}));" +
             "    });" +
             "    window.OverlayEventBus.on('ad:error', function(d) {" +
             "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:error'," +
@@ -263,14 +263,7 @@ public class MainActivity extends CordovaActivity {
         view.evaluateJavascript(js, null);
         Log.i(TAG, "OverlayEventBus subscription injected");
 
-        // Separate probe to find checkAndShowAds location
-        mainHandler.postDelayed(() -> view.evaluateJavascript(
-            "(function(){" +
-            "  var keys=[];" +
-            "  try{keys=Object.keys(window).filter(function(k){return typeof window[k]==='function'&&(k.indexOf('Ad')>=0||k.indexOf('Show')>=0||k.indexOf('check')>=0||k.indexOf('play')>=0);});}catch(e){}" +
-            "  console.log('[CurbAds] Window ad fns: '+keys.join(','));" +
-            "  try{var mo=window.minimalAdvertisementOverlay;if(mo){var mk=Object.keys(mo).filter(function(k){return typeof mo[k]==='function';});console.log('[CurbAds] Overlay fns: '+mk.join(','));}}catch(e){}" +
-            "})()", null), 3000);
+
     }
 
     // ── OverlayEventBridge — receives events from OverlayEventBus ────────────
@@ -305,14 +298,22 @@ public class MainActivity extends CordovaActivity {
                         }
                         break;
 
-                    case "ad:ended":
+                    case "ad:completed":
                         int dur = evt.optInt("duration", 30);
-                        String src = evt.optString("source", adSourceThisCycle);
-                        Log.i(TAG, "AD ENDED — source:" + src + " duration:" + dur + "s");
+                        String adType = evt.optString("adType", adSourceThisCycle);
+                        String adId = evt.optString("adId", "");
+                        Log.i(TAG, "AD COMPLETED — adType:" + adType + " adId:" + adId + " duration:" + dur + "s");
                         if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
+                        // Cancel auto-cycle timer so we control next ad
+                        adWebView.evaluateJavascript(
+                            "if(window.minimalAdvertisementOverlay&&window.minimalAdvertisementOverlay.masterAdTimer){" +
+                            "  clearTimeout(window.minimalAdvertisementOverlay.masterAdTimer);" +
+                            "  window.minimalAdvertisementOverlay.masterAdTimer=null;" +
+                            "  console.log('[CurbAds] masterAdTimer cleared — SOV control active');" +
+                            "}", null);
                         final int durFinal = dur;
-                        final String srcFinal = src;
-                        mainHandler.post(() -> dismissAdOverlay(true, srcFinal, durFinal));
+                        final String typeFinal = adType;
+                        mainHandler.post(() -> dismissAdOverlay(true, typeFinal, durFinal));
                         break;
 
                     case "ad:error":
@@ -364,19 +365,20 @@ public class MainActivity extends CordovaActivity {
             );
         }
 
-        // Use Sneh's official trigger API — checkAndShowAds(true) = force immediate play
-        // Retry up to 5 times with 1s delay if not ready yet
+        // Use Sneh's official trigger API — window.minimalAdvertisementOverlay.checkAndShowAds(true)
+        // Retry up to 10 times with 1s delay if not ready yet
         adWebView.evaluateJavascript(
             "(function tryTrigger(attempt){" +
             "  try{" +
-            "    if(window.checkAndShowAds){" +
-            "      window.checkAndShowAds(true);" +
+            "    var mao = window.minimalAdvertisementOverlay;" +
+            "    if(mao && typeof mao.checkAndShowAds === 'function'){" +
+            "      mao.checkAndShowAds(true);" +
             "      console.log('[CurbAds] checkAndShowAds(true) called (attempt '+attempt+')');" +
-            "    } else if(attempt < 5){" +
+            "    } else if(attempt < 10){" +
             "      console.log('[CurbAds] checkAndShowAds not ready — retrying in 1s (attempt '+attempt+')');" +
             "      setTimeout(function(){ tryTrigger(attempt+1); }, 1000);" +
             "    } else {" +
-            "      console.log('[CurbAds] checkAndShowAds unavailable after 5 attempts — player auto-cycling');" +
+            "      console.log('[CurbAds] checkAndShowAds unavailable after 10 attempts — player auto-cycling');" +
             "    }" +
             "  }catch(e){console.log('[CurbAds] checkAndShowAds error: '+e.message);}" +
             "})(1)", null);
