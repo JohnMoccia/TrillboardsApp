@@ -304,13 +304,9 @@ public class MainActivity extends CordovaActivity {
                         String adId = evt.optString("adId", "");
                         Log.i(TAG, "AD COMPLETED — adType:" + adType + " adId:" + adId + " duration:" + dur + "s");
                         if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-                        // Cancel auto-cycle timer so we control next ad
-                        adWebView.evaluateJavascript(
-                            "if(window.minimalAdvertisementOverlay&&window.minimalAdvertisementOverlay.masterAdTimer){" +
-                            "  clearTimeout(window.minimalAdvertisementOverlay.masterAdTimer);" +
-                            "  window.minimalAdvertisementOverlay.masterAdTimer=null;" +
-                            "  console.log('[CurbAds] masterAdTimer cleared — SOV control active');" +
-                            "}", null);
+                        // NOTE: masterAdTimer NOT cleared — letting their auto-cycle run
+                        // to ensure content cache prefetch completes. SOV control via checkAndShowAds only.
+                        // TODO: re-enable once cache is warm and ad:completed fires reliably
                         final int durFinal = dur;
                         final String typeFinal = adType;
                         mainHandler.post(() -> dismissAdOverlay(true, typeFinal, durFinal));
