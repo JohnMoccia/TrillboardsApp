@@ -441,15 +441,30 @@ function logToKV(adid, durationSec, completed, impressionId) {
   if (REMOTE_CONFIG.kv_enabled === false) return;
   kvCount++;
   if(completed) kvCompleted++;
-  // Only increment completed here — requests are counted at cycle start via incKVRequest()
   var totals = loadTodayTotals();
   if(completed) {
     totals.completed++;
     saveTodayTotals(totals.count, totals.completed);
     log('KV completed: '+totals.completed+' / requests: '+totals.count, 'info');
-    // No KV flush here — handled by 5-min interval, but flush immediately on completion for accuracy
     flushKVBuffer(totals);
   }
+  // Send per-impression event for breakdown tracking (ima/paid/self_promo/no_fill)
+  // Uses impression_event type so worker increments counters without overwriting totals
+  fetch(KV_URL, {
+    method: 'POST',
+    headers: {'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      type: 'impression_event',
+      screen_id: SCREEN_ID,
+      device_id: DEVICE_ID,
+      ad_type: adTypeThisCycle || 'unknown',
+      source: adid || 'unknown',
+      completed: !!completed,
+      duration_ms: (durationSec || 0) * 1000,
+      impression_id: impressionId || '',
+      timestamp: new Date().toISOString()
+    })
+  }).catch(function(){});
 }
 
 // Call once per ad cycle start (request fired)
