@@ -1110,6 +1110,10 @@ function reqNext(){
     if(!vastXml || vastXml.indexOf('<Ad') === -1){
       throw new Error('Empty VAST (no Ad element, '+vastXml.length+' bytes)');
     }
+    // Skip VPAID — IMA on Android WebView cannot render JavaScript creatives
+    if(vastXml.indexOf('apiFramework="VPAID"') >= 0 || vastXml.indexOf("apiFramework='VPAID'") >= 0){
+      throw new Error('VPAID creative — not renderable in WebView, skipping');
+    }
     log('VAST XML fetched ('+vastXml.length+' bytes) — passing to IMA via adsResponse','ok');
     var req = new google.ima.AdsRequest();
     // Pass raw XML inline — IMA never fetches from device
@@ -1256,6 +1260,15 @@ function startGPS(){
 // ── IFRAME AD LOOP (Trillboards embed) ───────────────────────────────────────
 var EMBED_URL  = 'https://screen.trillboards.com?fp='+DEVICE_ID+'&ctv=1&autoplay=1';
 var adPlaying  = false;
+var adTypeThisCycle   = 'unknown'; // ima | paid | self_promo
+var adSourceThisCycle = 'unknown'; // adipolo | vidverto | etc
+
+// Called by Java when ad detail is available from minimalAdvertisementOverlay
+function onAdDetail(source, adType, adId) {
+  adSourceThisCycle = source || 'unknown';
+  adTypeThisCycle   = adType  || 'unknown';
+  log('Ad detail — source:'+source+' type:'+adType+' id:'+adId, 'ok');
+}
 var adStartedThisCycle = false;
 var adWatchdog = null;
 
@@ -1295,12 +1308,15 @@ function showAdFrame() {
   }
 }
 
-function onAdOverlayClosed(completed) {
-  log('Native overlay closed completed='+completed, 'ok');
+function onAdOverlayClosed(completed, source, durationSec) {
+  source = source || 'trillboards';
+  durationSec = durationSec || 30;
+  log('Native overlay closed completed='+completed+' source='+source, 'ok');
   var wasCompleted = completed || adStartedThisCycle;
   if(adStartedThisCycle && !completed) log('Ad started but no complete event — treating as completed', 'warn');
   adStartedThisCycle = false;
-  closeAdFrame('trillboards', 30, wasCompleted);
+  closeAdFrame(adSourceThisCycle || source, adTypeThisCycle || 'unknown', durationSec, wasCompleted);
+  adTypeThisCycle = 'unknown'; adSourceThisCycle = 'unknown';
 }
 
 function handleOverlayLog(msg) {
