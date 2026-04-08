@@ -238,11 +238,7 @@ public class MainActivity extends CordovaActivity {
             "      setTimeout(arguments.callee, 1000);" +
             "      return;" +
             "    }" +
-            "    // Debug: log available window functions to find checkAndShowAds" +
-            "    var fns = Object.keys(window).filter(function(k){" +
-            "      return typeof window[k]==='function' && (k.toLowerCase().includes('ad')||k.toLowerCase().includes('show')||k.toLowerCase().includes('check')||k.toLowerCase().includes('play'));" +
-            "    });" +
-            "    console.log('[CurbAds] Available ad functions: ' + JSON.stringify(fns));" +
+
             "    window.OverlayEventBus.on('ad:started', function(d) {" +
             "      OverlayEventBridge.onEvent(JSON.stringify({type:'ad:started'," +
             "        source:d&&d.source?d.source:'unknown'," +
@@ -266,6 +262,15 @@ public class MainActivity extends CordovaActivity {
             "})();";
         view.evaluateJavascript(js, null);
         Log.i(TAG, "OverlayEventBus subscription injected");
+
+        // Separate probe to find checkAndShowAds location
+        mainHandler.postDelayed(() -> view.evaluateJavascript(
+            "(function(){" +
+            "  var keys=[];" +
+            "  try{keys=Object.keys(window).filter(function(k){return typeof window[k]==='function'&&(k.indexOf('Ad')>=0||k.indexOf('Show')>=0||k.indexOf('check')>=0||k.indexOf('play')>=0);});}catch(e){}" +
+            "  console.log('[CurbAds] Window ad fns: '+keys.join(','));" +
+            "  try{var mo=window.minimalAdvertisementOverlay;if(mo){var mk=Object.keys(mo).filter(function(k){return typeof mo[k]==='function';});console.log('[CurbAds] Overlay fns: '+mk.join(','));}}catch(e){}" +
+            "})()", null), 3000);
     }
 
     // ── OverlayEventBridge — receives events from OverlayEventBus ────────────
