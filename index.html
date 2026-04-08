@@ -1315,7 +1315,7 @@ function onAdOverlayClosed(completed, source, durationSec) {
   var wasCompleted = completed || adStartedThisCycle;
   if(adStartedThisCycle && !completed) log('Ad started but no complete event — treating as completed', 'warn');
   adStartedThisCycle = false;
-  closeAdFrame(adSourceThisCycle || source, adTypeThisCycle || 'unknown', durationSec, wasCompleted);
+  closeAdFrame(adSourceThisCycle || source, durationSec, wasCompleted);
   adTypeThisCycle = 'unknown'; adSourceThisCycle = 'unknown';
 }
 
