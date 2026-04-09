@@ -166,6 +166,12 @@ public class MainActivity extends CordovaActivity {
             ws.setAllowUniversalAccessFromFileURLs(true);
             ws.setAllowFileAccessFromFileURLs(true);
         }
+        // Limit renderer memory to prevent OOM crash on SM-T500 (2GB RAM)
+        // Bugreport showed heap: 70/70 before native crash
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            adWebView.setRendererPriorityPolicy(
+                android.webkit.WebView.RENDERER_PRIORITY_BOUND, true);
+        }
 
         // Inject OverlayEventBus bridge — Sneh's official event API
         adWebView.addJavascriptInterface(new OverlayEventBridge(), "OverlayEventBridge");

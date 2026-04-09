@@ -6,6 +6,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.app.usage.UsageStatsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.net.wifi.WifiManager;
@@ -26,9 +27,7 @@ public class AdService extends Service {
     private static final String CHANNEL_ID = "curb_ad_channel";
     private static final int    NOTIF_ID   = 1001;
 
-    // Check if MainActivity is alive every 60 seconds
     private static final long WATCHDOG_INTERVAL_MS = 60_000;
-    // Wake lock timeout — 2 hours, re-acquired on each watchdog tick
     private static final long WAKE_LOCK_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
     private PowerManager.WakeLock wakeLock;
@@ -44,19 +43,15 @@ public class AdService extends Service {
         startForeground(NOTIF_ID, buildNotification("Ad player running"));
         acquireWakeLock();
         acquireWifiLock();
+        checkStandbyBucket();
         startWatchdog();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "AdService onStartCommand");
-        // Re-acquire locks if released
-        if (wakeLock == null || !wakeLock.isHeld()) {
-            acquireWakeLock();
-        }
-        if (wifiLock == null || !wifiLock.isHeld()) {
-            acquireWifiLock();
-        }
+        if (wakeLock == null || !wakeLock.isHeld()) acquireWakeLock();
+        if (wifiLock == null || !wifiLock.isHeld()) acquireWifiLock();
         return START_STICKY;
     }
 
@@ -71,6 +66,39 @@ public class AdService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) { return null; }
+
+    // ── Standby Bucket Check ──────────────────────────────────────────────────
+    // Samsung moves apps to RESTRICTED bucket (5) after ~4hrs which blocks
+    // foreground services. Log the current bucket so we can detect this.
+    // The fix requires the user to manually set battery to "Unrestricted" in Settings.
+    private void checkStandbyBucket() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                UsageStatsManager usm = (UsageStatsManager) getSystemService(
+                    Context.USAGE_STATS_SERVICE);
+                if (usm != null) {
+                    int bucket = usm.getAppStandbyBucket();
+                    String bucketName;
+                    switch (bucket) {
+                        case UsageStatsManager.STANDBY_BUCKET_ACTIVE:     bucketName = "ACTIVE"; break;
+                        case UsageStatsManager.STANDBY_BUCKET_WORKING_SET: bucketName = "WORKING_SET"; break;
+                        case UsageStatsManager.STANDBY_BUCKET_FREQUENT:   bucketName = "FREQUENT"; break;
+                        case UsageStatsManager.STANDBY_BUCKET_RARE:       bucketName = "RARE"; break;
+                        case UsageStatsManager.STANDBY_BUCKET_RESTRICTED: bucketName = "RESTRICTED ⚠️"; break;
+                        default: bucketName = "UNKNOWN(" + bucket + ")";
+                    }
+                    Log.i(TAG, "App standby bucket: " + bucketName);
+                    if (bucket >= UsageStatsManager.STANDBY_BUCKET_RESTRICTED) {
+                        Log.w(TAG, "App is in RESTRICTED bucket — Samsung may kill this service. " +
+                            "Go to Settings → Apps → Curb Trillboards → Battery → Unrestricted");
+                        updateNotification("⚠️ Set Battery to Unrestricted in Settings");
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Could not check standby bucket: " + e.getMessage());
+            }
+        }
+    }
 
     // ── Wake Lock ─────────────────────────────────────────────────────────────
     private void acquireWakeLock() {
@@ -90,16 +118,13 @@ public class AdService extends Service {
         }
     }
 
-    // ── WiFi Lock — prevents roaming/disconnect while app is running ──────────
-    // The bugreport showed the device roaming between two APs every ~20 minutes
-    // causing network connections to drop. WiFi lock prevents this.
+    // ── WiFi Lock ─────────────────────────────────────────────────────────────
     private void acquireWifiLock() {
         try {
             WifiManager wm = (WifiManager) getApplicationContext()
                 .getSystemService(Context.WIFI_SERVICE);
             if (wm == null) return;
             if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
-            // WIFI_MODE_FULL_HIGH_PERF keeps WiFi at full performance, no roaming
             wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF,
                 "CurbAds::WifiLock");
             wifiLock.acquire();
@@ -126,17 +151,17 @@ public class AdService extends Service {
         watchdogRunnable = new Runnable() {
             @Override
             public void run() {
-                // Re-acquire wake lock before it expires
                 if (wakeLock == null || !wakeLock.isHeld()) {
                     Log.w(TAG, "WakeLock expired — re-acquiring");
                     acquireWakeLock();
                 }
-
-                // Re-acquire wifi lock if dropped
                 if (wifiLock == null || !wifiLock.isHeld()) {
                     Log.w(TAG, "WifiLock dropped — re-acquiring");
                     acquireWifiLock();
                 }
+
+                // Check standby bucket every hour (every 60 ticks)
+                checkStandbyBucket();
 
                 if (!isMainActivityRunning()) {
                     Log.w(TAG, "MainActivity not found — restarting");
