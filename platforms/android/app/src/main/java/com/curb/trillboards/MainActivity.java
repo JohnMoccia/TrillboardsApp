@@ -309,13 +309,17 @@ public class MainActivity extends CordovaActivity {
                         String adType = evt.optString("adType", adSourceThisCycle);
                         String adId = evt.optString("adId", "");
                         Log.i(TAG, "AD COMPLETED — adType:" + adType + " adId:" + adId + " duration:" + dur + "s");
-                        if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
-                        // NOTE: masterAdTimer NOT cleared — letting their auto-cycle run
-                        // to ensure content cache prefetch completes. SOV control via checkAndShowAds only.
-                        // TODO: re-enable once cache is warm and ad:completed fires reliably
-                        final int durFinal = dur;
-                        final String typeFinal = adType;
-                        mainHandler.post(() -> dismissAdOverlay(true, typeFinal, durFinal));
+                        // Only dismiss if adId is non-empty (real ad played)
+                        // Empty adId = waterfall exhaustion completion, not a real fill
+                        // In that case keep overlay visible so content cache can play
+                        if (!adId.isEmpty()) {
+                            if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
+                            final int durFinal = dur;
+                            final String typeFinal = adType;
+                            mainHandler.post(() -> dismissAdOverlay(true, typeFinal, durFinal));
+                        } else {
+                            Log.i(TAG, "AD COMPLETED with empty adId — waterfall exhaustion, keeping overlay for cache");
+                        }
                         break;
 
                     case "ad:error":
