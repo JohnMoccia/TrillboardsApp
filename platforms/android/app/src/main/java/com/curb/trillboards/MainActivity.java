@@ -53,6 +53,71 @@ public class MainActivity extends CordovaActivity {
     private boolean programmaticFillThisCycle = false;
     private String  adSourceThisCycle         = "content_cache";
 
+    // ── SSP / waterfall attribution stats (per 5-min cycle) ─────────────────
+    // Populated from ad WebView console messages. Emitted on safety watchdog +
+    // dispatched to Cordova JS for dashboard visibility.
+    private final java.util.Map<String, int[]> sspStats = new java.util.HashMap<>();
+    private int totalImaErrors = 0;
+    private int total303Errors = 0;
+    private int waterfallExhaustCount = 0;
+    private int adStartedCount = 0;
+    private long sspStatsWindowStart = System.currentTimeMillis();
+
+    private int[] getSspBucket(String src) {
+        int[] b = sspStats.get(src);
+        if (b == null) { b = new int[]{0,0,0,0}; sspStats.put(src, b); }
+        return b; // [attempts, errors303, otherErrors, fills]
+    }
+
+    private String formatSspBreakdown() {
+        StringBuilder sb = new StringBuilder();
+        long winSec = (System.currentTimeMillis() - sspStatsWindowStart) / 1000;
+        sb.append("[SSP window=").append(winSec).append("s")
+          .append(" imaErr=").append(totalImaErrors)
+          .append(" code303=").append(total303Errors)
+          .append(" waterfallExhaust=").append(waterfallExhaustCount)
+          .append(" adStarted=").append(adStartedCount).append("]");
+        if (sspStats.isEmpty()) { sb.append(" no-per-source-data"); return sb.toString(); }
+        for (java.util.Map.Entry<String, int[]> e : sspStats.entrySet()) {
+            int[] b = e.getValue();
+            sb.append(' ').append(e.getKey())
+              .append("(att=").append(b[0])
+              .append(",303=").append(b[1])
+              .append(",err=").append(b[2])
+              .append(",fill=").append(b[3]).append(')');
+        }
+        return sb.toString();
+    }
+
+    private String formatSspBreakdownJson() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            long winSec = (System.currentTimeMillis() - sspStatsWindowStart) / 1000;
+            out.put("window_s", winSec);
+            out.put("imaErrors", totalImaErrors);
+            out.put("code303", total303Errors);
+            out.put("waterfallExhausts", waterfallExhaustCount);
+            out.put("adStarted", adStartedCount);
+            org.json.JSONObject by = new org.json.JSONObject();
+            for (java.util.Map.Entry<String, int[]> e : sspStats.entrySet()) {
+                int[] b = e.getValue();
+                org.json.JSONObject s = new org.json.JSONObject();
+                s.put("attempts", b[0]); s.put("code303", b[1]);
+                s.put("otherErrors", b[2]); s.put("fills", b[3]);
+                by.put(e.getKey(), s);
+            }
+            out.put("bySource", by);
+        } catch (Exception ignored) {}
+        return out.toString();
+    }
+
+    private void resetSspStats() {
+        sspStats.clear();
+        totalImaErrors = 0; total303Errors = 0;
+        waterfallExhaustCount = 0; adStartedCount = 0;
+        sspStatsWindowStart = System.currentTimeMillis();
+    }
+
     private final List<JSONObject> pendingImpressions = new ArrayList<>();
 
     @Override
@@ -179,7 +244,50 @@ public class MainActivity extends CordovaActivity {
 
         // Inject OverlayEventBus bridge — Sneh's official event API
         adWebView.addJavascriptInterface(new OverlayEventBridge(), "OverlayEventBridge");
-        adWebView.setWebChromeClient(new WebChromeClient());
+
+        // Intercept ad WebView console messages to extract per-SSP fill/error attribution.
+        // The Trillboards embed emits lines like:
+        //   [Overlay] IMA Ad Error {"code":303,...}
+        //   [Overlay] Handling IMA ad error - falling back ... {"waterfallExhausted":true,"finalSource":"hivestack"}
+        //   [Overlay] SSP IMA ad error ... {"errorCode":303}
+        adWebView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                try {
+                    String msg = m.message();
+                    if (msg == null) return super.onConsoleMessage(m);
+
+                    // Count any IMA Ad Error line
+                    if (msg.contains("[Overlay] IMA Ad Error")) {
+                        totalImaErrors++;
+                        if (msg.contains("\"code\":303")) total303Errors++;
+                    }
+
+                    // Waterfall exhaust + finalSource attribution
+                    if (msg.contains("waterfallExhausted\":true")) {
+                        waterfallExhaustCount++;
+                        int i = msg.indexOf("finalSource\":\"");
+                        if (i >= 0) {
+                            int s = i + "finalSource\":\"".length();
+                            int e = msg.indexOf('"', s);
+                            if (e > s) {
+                                String src = msg.substring(s, e);
+                                int[] b = getSspBucket(src);
+                                b[0]++; // attempt
+                                if (msg.contains("errorCode\":303") || msg.contains("\"code\":303")) b[1]++;
+                                else b[2]++;
+                            }
+                        }
+                    }
+
+                    // Periodic summary — emit every 25 IMA errors so logs aren't spammed per-line
+                    if (totalImaErrors > 0 && totalImaErrors % 25 == 0) {
+                        Log.i(TAG, "SSP_STATS " + formatSspBreakdown());
+                    }
+                } catch (Exception ignored) {}
+                return super.onConsoleMessage(m);
+            }
+        });
         adWebView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -330,6 +438,12 @@ public class MainActivity extends CordovaActivity {
                     case "ad:started":
                         programmaticFillThisCycle = evt.optBoolean("isProgrammatic", false);
                         adSourceThisCycle = evt.optString("source", "unknown");
+                        // SSP attribution — count a fill for this source in the current window
+                        adStartedCount++;
+                        if (!"unknown".equals(adSourceThisCycle)) {
+                            int[] b = getSspBucket(adSourceThisCycle);
+                            b[3]++; // fill
+                        }
                         Log.i(TAG, "AD STARTED — source:" + adSourceThisCycle
                             + " programmatic:" + programmaticFillThisCycle);
                         // Cancel 2-min safety watchdog, start 45s completion watchdog
@@ -441,18 +555,26 @@ public class MainActivity extends CordovaActivity {
         // #7 Loud error log + explicit no_fill signal so Cordova/dashboard can surface it.
         // completed=false — only real ad:completed events count as fills.
         adWatchdog = () -> {
+            String sspSummary = formatSspBreakdown();
+            String sspJson    = formatSspBreakdownJson();
             Log.e(TAG, "SAFETY WATCHDOG FIRED — 5min elapsed with NO ad:completed event. "
                 + "Embed is alive but not playing. Likely causes: empty streamQueue / waterfall exhausted / "
                 + "OverlayEventBus not emitting ad:completed. Source cycle=" + adSourceThisCycle
                 + " programmatic=" + programmaticFillThisCycle);
+            Log.e(TAG, "SSP_STATS " + sspSummary);
             // Notify Cordova JS explicitly so the dashboard and logs record a NO_FILL event
             if (appView != null) {
+                // Escape the JSON for embedding in a JS string literal
+                final String jsonEsc = sspJson.replace("\\", "\\\\").replace("'", "\\'");
                 runOnUiThread(() -> appView.getEngine().evaluateJavascript(
                     "if(typeof log==='function') log('NATIVE SAFETY WATCHDOG FIRED — dismissing as no_fill','err');"
                   + "if(typeof addEv==='function') addEv('err','NATIVE SAFETY WATCHDOG 5min','');"
-                  + "if(typeof showCurbFallback==='function') showCurbFallback('native_safety_watchdog');",
+                  + "if(typeof showCurbFallback==='function') showCurbFallback('native_safety_watchdog');"
+                  + "if(typeof onSspStats==='function') onSspStats('" + jsonEsc + "');",
                     null));
             }
+            // Reset stats for the next window
+            resetSspStats();
             dismissAdOverlay(false, "no_fill", 0);
         };
         mainHandler.postDelayed(adWatchdog, 300000);

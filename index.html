@@ -1294,6 +1294,29 @@ function onAdDetail(source, adType, adId) {
   adTypeThisCycle   = adType  || 'unknown';
   log('Ad detail — source:'+source+' type:'+adType+' id:'+adId, 'ok');
 }
+
+// Called by Java on safety-watchdog fire with per-SSP attribution stats
+// for the 5-min cycle that just ended. Also mirrored to global for dashboard
+// scraping and optional POST to the backend.
+var latestSspStats = null;
+function onSspStats(jsonStr) {
+  try {
+    latestSspStats = JSON.parse(jsonStr);
+    var s = latestSspStats;
+    var by = s.bySource || {};
+    var parts = [];
+    Object.keys(by).forEach(function(k){
+      var b = by[k];
+      parts.push(k+' att='+b.attempts+' 303='+b.code303+' err='+b.otherErrors+' fill='+b.fills);
+    });
+    log('SSP breakdown ['+s.window_s+'s] imaErr='+s.imaErrors+' 303='+s.code303+
+        ' waterfallExhaust='+s.waterfallExhausts+' adStarted='+s.adStarted+
+        (parts.length?' | '+parts.join(' | '):' | no-per-source-data'), 'warn');
+    addEv('err','SSP '+s.code303+'/'+s.imaErrors+' 303s, '+s.waterfallExhausts+' exhausts',parts.join(';'));
+  } catch(e) {
+    log('onSspStats parse error: '+e.message, 'err');
+  }
+}
 var adStartedThisCycle = false;
 var adWatchdog = null;
 
