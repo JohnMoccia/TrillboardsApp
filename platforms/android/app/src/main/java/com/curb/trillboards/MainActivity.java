@@ -45,6 +45,10 @@ public class MainActivity extends CordovaActivity {
     private Handler  mainHandler = new Handler(Looper.getMainLooper());
     private Runnable adWatchdog  = null;
 
+    // #5 Guard — onPageFinished can fire more than once (SPA client-side nav).
+    // Only inject the OverlayEventBus subscription once per WebView lifetime.
+    private boolean overlaySubscribed = false;
+
     // SOV tracking — set by OverlayEventBus events
     private boolean programmaticFillThisCycle = false;
     private String  adSourceThisCycle         = "content_cache";
@@ -180,8 +184,43 @@ public class MainActivity extends CordovaActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 Log.i(TAG, "Ad WebView loaded: " + url);
-                // Subscribe to OverlayEventBus after page loads
-                mainHandler.postDelayed(() -> subscribeToOverlayEvents(view), 2000);
+                // #5 Subscribe to OverlayEventBus after page loads — only once per lifetime.
+                // Previous behavior fired on every SPA route change → duplicate listeners.
+                if (!overlaySubscribed) {
+                    mainHandler.postDelayed(() -> subscribeToOverlayEvents(view), 2000);
+                } else {
+                    Log.d(TAG, "onPageFinished — OverlayEventBus already subscribed, skipping");
+                }
+            }
+
+            // #1 WebView renderer crash recovery — LMK can kill the Chromium sandbox child,
+            // leaving a black WebView. Previously the app sat dead until someone tapped the
+            // launcher. Now we detect the renderer-gone event and rebuild the WebView.
+            @android.annotation.TargetApi(Build.VERSION_CODES.O)
+            @Override
+            public boolean onRenderProcessGone(WebView view,
+                    android.webkit.RenderProcessGoneDetail detail) {
+                boolean didCrash = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? detail.didCrash() : false;
+                Log.e(TAG, "AD WEBVIEW RENDERER GONE — didCrash=" + didCrash
+                    + " (LMK or crash) — rebuilding");
+                // Detach dead WebView
+                try {
+                    android.view.ViewParent p = view.getParent();
+                    if (p instanceof android.view.ViewGroup) {
+                        ((android.view.ViewGroup) p).removeView(view);
+                    }
+                    view.destroy();
+                } catch (Exception ignored) {}
+                adWebView = null;
+                overlaySubscribed = false;
+                adShowing = false;
+                // Rebuild on main thread after a brief pause so the system settles
+                mainHandler.postDelayed(() -> {
+                    Log.i(TAG, "Rebuilding ad WebView after renderer-gone");
+                    createAdWebView();
+                }, 1500);
+                return true; // we handled it — don't let the system kill the activity
             }
 
             @Override
@@ -236,6 +275,11 @@ public class MainActivity extends CordovaActivity {
     // ── Subscribe to Sneh's OverlayEventBus ──────────────────────────────────
     // This is the official API — replaces the poll-based video detection
     private void subscribeToOverlayEvents(WebView view) {
+        if (overlaySubscribed) {
+            Log.d(TAG, "subscribeToOverlayEvents skipped — already subscribed");
+            return;
+        }
+        overlaySubscribed = true;
         String js =
             "(function() {" +
             "  try {" +
@@ -372,7 +416,9 @@ public class MainActivity extends CordovaActivity {
         }
 
         // Use Sneh's official trigger API — window.minimalAdvertisementOverlay.checkAndShowAds(true)
-        // Retry up to 10 times with 1s delay if not ready yet
+        // Retry up to 10 times with 1s delay if not ready yet.
+        // #8 If still not ready after 10 attempts, tell our Cordova JS so it can render
+        //    the Curb fallback instead of sitting on a black overlay for 5 minutes.
         adWebView.evaluateJavascript(
             "(function tryTrigger(attempt){" +
             "  try{" +
@@ -384,15 +430,29 @@ public class MainActivity extends CordovaActivity {
             "      console.log('[CurbAds] checkAndShowAds not ready — retrying in 1s (attempt '+attempt+')');" +
             "      setTimeout(function(){ tryTrigger(attempt+1); }, 1000);" +
             "    } else {" +
-            "      console.log('[CurbAds] checkAndShowAds unavailable after 10 attempts — player auto-cycling');" +
+            "      console.log('[CurbAds] checkAndShowAds unavailable after 10 attempts — notifying Cordova fallback');" +
+            "      try{ OverlayEventBridge.onEvent(JSON.stringify({type:'ad:error'," +
+            "        error:'checkAndShowAds_unavailable',waterfallExhausted:true})); }catch(e){}" +
             "    }" +
             "  }catch(e){console.log('[CurbAds] checkAndShowAds error: '+e.message);}" +
             "})(1)", null);
 
-        // Safety watchdog — 5 min max, gives content cache time to play
-        // completed=false — only real ad:completed events count as fills
+        // Safety watchdog — 5 min max, gives content cache time to play.
+        // #7 Loud error log + explicit no_fill signal so Cordova/dashboard can surface it.
+        // completed=false — only real ad:completed events count as fills.
         adWatchdog = () -> {
-            Log.w(TAG, "Safety watchdog fired — no ad:completed received, not counting as fill");
+            Log.e(TAG, "SAFETY WATCHDOG FIRED — 5min elapsed with NO ad:completed event. "
+                + "Embed is alive but not playing. Likely causes: empty streamQueue / waterfall exhausted / "
+                + "OverlayEventBus not emitting ad:completed. Source cycle=" + adSourceThisCycle
+                + " programmatic=" + programmaticFillThisCycle);
+            // Notify Cordova JS explicitly so the dashboard and logs record a NO_FILL event
+            if (appView != null) {
+                runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                    "if(typeof log==='function') log('NATIVE SAFETY WATCHDOG FIRED — dismissing as no_fill','err');"
+                  + "if(typeof addEv==='function') addEv('err','NATIVE SAFETY WATCHDOG 5min','');"
+                  + "if(typeof showCurbFallback==='function') showCurbFallback('native_safety_watchdog');",
+                    null));
+            }
             dismissAdOverlay(false, "no_fill", 0);
         };
         mainHandler.postDelayed(adWatchdog, 300000);

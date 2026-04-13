@@ -565,12 +565,14 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
       addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
       addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
       if(ok){try{var rd=JSON.parse(txt);var impId=(rd.data&&rd.data.proofs&&rd.data.proofs[0])?rd.data.proofs[0].impression_id:'';
-        // If Trillboards processed the impression (proof returned), treat as completed
-        // This handles the case where ad:completed doesn't fire from OverlayEventBus (?v=dev bug)
-        var trillConfirmed = rd.data&&rd.data.processed>=1;
-        if(trillConfirmed && !completed){
-          log('Trillboards proof received — treating as completed (OverlayEventBus ad:completed bug)','ok');
-          completed = true;
+        // NOTE: rd.data.processed >= 1 ONLY means Trillboards accepted the impression row.
+        // It does NOT mean pixels rendered on screen. We previously marked these as
+        // completed, which produced phantom fills when the WebView was black.
+        // Only trust native ad:completed from OverlayEventBus (sent via onAdOverlayClosed).
+        var trillAccepted = rd.data&&rd.data.processed>=1;
+        if(trillAccepted && !completed){
+          log('Impression accepted by Trillboards API — but NO native ad:completed received; NOT counting as fill','warn');
+          addEv('err','PHANTOM — API accepted but no native ad:completed','');
         }
         logToKV(adid,durationSec,completed,impId);}catch(e2){logToKV(adid,durationSec,completed,'');}}
       else{logErrorToKV(adid,durationSec,completed,status,txt);if(attempt<3){var delay=[0,2000,4000,8000][attempt+1]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}}
@@ -1313,6 +1315,18 @@ function showAdFrame() {
   incKVRequest(); // count this as a request
   if(typeof CurbBridge !== 'undefined') {
     CurbBridge.showAd();
+    log('CurbBridge.showAd() called — expect ad_started within 10s', 'info');
+    // #10 Startup diagnostic — if native ad:started never fires, surface it loudly
+    var startupCheck = setTimeout(function(){
+      if(!adStartedThisCycle) {
+        log('NO ad_started 10s after CurbBridge.showAd() — native overlay may be stuck or embed has no fill', 'err');
+        addEv('err', 'DIAGNOSTIC — no ad_started 10s after showAd()', '');
+      }
+    }, 10000);
+    // Clear the diagnostic if cycle closes early
+    var _origClose = closeAdFrame;
+    // Single-shot patch: clear the timer in the next close path via watchdog chain
+    adWatchdog = setTimeout(function(){ clearTimeout(startupCheck); }, 11000);
   } else {
     log('CurbBridge not available — using iframe fallback', 'warn');
     // Create iframe fresh each time — never exists in DOM in native mode
@@ -1321,11 +1335,20 @@ function showAdFrame() {
     frame.id = 'ad-frame';
     frame.allow = 'autoplay; fullscreen; geolocation';
     frame.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:5000';
+    // #9 iframe error detection — previously silent
+    frame.onload  = function(){ log('Embed iframe loaded: '+frame.src.substring(0,80),'ok'); };
+    frame.onerror = function(){
+      log('Embed iframe failed to load — showing Curb fallback','err');
+      addEv('err','IFRAME LOAD FAILED','');
+      showCurbFallback('iframe_load_failed');
+      setTimeout(function(){ closeAdFrame('iframe_error', 0, false); }, 10000);
+    };
     container.innerHTML = '';
     container.appendChild(frame);
     frame.src = EMBED_URL + '&t=' + Date.now();
     document.getElementById('idle-screen').style.display = 'none';
     adWatchdog = setTimeout(function(){
+      log('Iframe watchdog — 45s with no ad:started, closing','err');
       closeAdFrame('watchdog', 0, false);
     }, 45000);
   }
@@ -1355,17 +1378,16 @@ function handleOverlayLog(msg) {
     }, 60000);
   }
   if(msg.indexOf('waterfallExhausted":true') >= 0 || msg.indexOf('waterfall_exhausted') >= 0) {
-    log('Overlay: waterfall exhausted — letting fallback play, watchdog set to 60s', 'warn');
-    addEv('err', 'NO FILL — waterfall exhausted (fallback playing)', '');
+    log('Overlay: waterfall exhausted — rendering Curb fallback','warn');
+    addEv('err', 'NO FILL — waterfall exhausted, Curb fallback', '');
     S.err++; updStats();
-    // FIX: don't close immediately — their player falls back to house ads after waterfall exhaustion
-    // If we close here, adPlaying=false and onAdOverlayClosed skips scheduling the next cycle
-    // Instead set a watchdog and let onAdOverlayClosed handle the close naturally
     clearTimeout(adWatchdog);
+    // Short grace window for provider content cache (~5s) then take over with Curb fallback
     adWatchdog = setTimeout(function(){
-      log('Overlay: fallback watchdog fired — closing', 'warn');
-      closeAdFrame('no_fill', 0, false);
-    }, 90000); // 90s max for fallback
+      showCurbFallback('waterfall_exhausted');
+      // hold fallback 20s then close and continue cycle
+      setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 20000);
+    }, 5000);
   }
   if(msg.indexOf('COMPLETE') >= 0 && msg.indexOf('Overlay') >= 0) {
     clearTimeout(adWatchdog);
@@ -1377,17 +1399,47 @@ function handleOverlayLog(msg) {
   }
 }
 
+// ── Curb fallback screen (shown when waterfall exhausts or embed is unresponsive) ──
+function showCurbFallback(reason){
+  try {
+    var idle = document.getElementById('idle-screen');
+    if(!idle) return;
+    idle.innerHTML = '<div style="text-align:center;color:#0fc;font-family:monospace;letter-spacing:4px">'+
+      '<div style="font-size:36px;margin-bottom:14px;color:#fff">CURB</div>'+
+      '<div style="font-size:14px;color:#0fc;margin-bottom:6px">NO FILL</div>'+
+      '<div style="font-size:10px;color:#555">'+reason+'</div>'+
+      '<div style="font-size:10px;color:#333;margin-top:10px" id="cf-countdown"></div>'+
+      '</div>';
+    idle.style.display = 'flex';
+    // Hide the provider iframe if one exists; native WebView is hidden by Java on dismiss
+    var container = document.getElementById('ad-frame-container');
+    if(container) container.innerHTML = '';
+    setNP('NO FILL', 'Curb fallback — '+reason);
+    log('Curb fallback rendered: '+reason, 'warn');
+  } catch(e) {
+    log('showCurbFallback failed: '+e.message, 'err');
+  }
+}
+
 function closeAdFrame(source, durationSec, completed) {
   if(!adPlaying) return;
   clearTimeout(adWatchdog);
   adPlaying = false;
   var container = document.getElementById('ad-frame-container');
   if(container) container.innerHTML = ''; // destroy iframe completely
-  document.getElementById('idle-screen').style.display = 'flex';
-  S.fills++; S.src = source; updStats();
+  // Restore normal idle screen (in case Curb fallback replaced its contents)
+  var idle = document.getElementById('idle-screen');
+  if(idle) {
+    idle.innerHTML = '<div style="color:#222;font-size:32px;letter-spacing:8px;text-transform:uppercase">CURB</div>';
+    idle.style.display = 'flex';
+  }
+  // Only count as a fill if the ad actually completed (no more false positives)
+  if(completed) { S.fills++; }
+  else { S.err++; }
+  S.src = source; updStats();
   setNP('IDLE', 'Next ad in '+Math.round(INTERVAL/1000)+'s');
-  addEv('done', 'AD ENDED — '+source+' '+durationSec+'s', '');
-  log('Ad ended — '+source+' '+durationSec+'s completed:'+completed, 'ok');
+  addEv(completed?'done':'err', (completed?'AD ENDED — ':'NO FILL — ')+source+' '+durationSec+'s', '');
+  log('Ad ended — '+source+' '+durationSec+'s completed:'+completed, completed?'ok':'warn');
   if(cachedDur===0) cachedDur = durationSec;
   sendImpressionWithRetry(source, durationSec, completed, 0, false);
   setTimeout(showAdFrame, INTERVAL);
