@@ -92,10 +92,10 @@
 </head>
 <body>
 <div id="idle-screen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;z-index:1"><div style="color:#222;font-size:32px;letter-spacing:8px;text-transform:uppercase">CURB</div></div>
-<!-- Trillboards embed iframe — shown fullscreen when ad plays -->
-<iframe id="ad-frame" src="" allow="autoplay; fullscreen; geolocation" style="position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:20"></iframe>
-<div id="ad-container" style="position:fixed;top:0;left:0;width:100%;height:100%;display:none">
-  <video id="content-video" playsinline muted></video>
+<!-- Trillboards embed iframe — injected dynamically in embed mode only -->
+<div id="ad-frame-container"></div>
+<div id="ad-container" style="position:fixed;top:0;left:0;width:100%;height:100%;display:none;z-index:10">
+  <video id="content-video" playsinline muted poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
   <div id="ad-display"></div>
   <div id="touch-blocker" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>
 </div>
@@ -186,6 +186,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div><div style="color:#fff;font-size:12px">Test Mode</div><div style="color:#444;font-size:10px">Logs extra debug info</div></div><button id="set-test-btn" onclick="toggleTestMode()" style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">OFF</button></div>
       <button onclick="clearStats()" style="width:100%;background:#1a0000;border:1px solid #3a0000;color:#f44;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-bottom:8px">CLEAR SESSION STATS</button>
       <button onclick="reloadSources()" style="width:100%;background:#001a00;border:1px solid #003a00;color:#0f0;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace">RELOAD WATERFALL SOURCES</button>
+      <button onclick="resetTodayKV()" style="width:100%;background:#1a001a;border:1px solid #3a003a;color:#f0f;padding:8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;margin-top:6px">RESET TODAY KV COUNTERS</button>
     </div>
     <div id="set-saved" style="display:none;text-align:center;color:#0f0;font-size:12px;padding:8px;background:#001500;border-radius:4px;margin-bottom:12px">Settings saved!</div>
     <button onclick="toggleSettings()" style="width:100%;background:#1a1a1a;border:1px solid #333;color:#555;padding:10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">CLOSE</button>
@@ -201,6 +202,7 @@
 <div id="stats-panel">
   <div class="ptitle">CURB AD MONITOR</div>
   <div class="uptime" id="uptime">UP: 00:00:00</div>
+    <div id="player-mode-badge" style="text-align:right;font-size:10px;color:#0f0;margin-bottom:4px">MODE: NATIVE</div>
   <div id="now-playing"><div class="nps" id="nps">INITIALIZING...</div><div class="npd" id="npd">Starting up</div></div>
   <div class="sec"><div class="sec-t">Session Stats</div>
     <div class="sr"><span class="sl">Total Requests</span><span class="sv" id="s-req">0</span></div>
@@ -255,12 +257,26 @@
 var DEVICE_ID='P_691cbdd4b3117cb1b692f4ae';
 var API_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var API_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/ads';
+// Earner API routed through our Cloudflare Worker to avoid CORS
+// Worker proxies /earner/* → api.trillboards.com/v2/earner/* with proper auth
 var BATCH_URL='https://api.trillboards.com/v1/partner/tracking/batch';
+
+// ── PLAYER MODE FLAG ─────────────────────────────────────────────────────────
+// 'embed'  = their native WebView overlay (current, proven)
+// 'native' = our own IMA player via earner API (full control, no their player)
+// Change via remote config: set player_mode in Cloudflare KV
+var PLAYER_MODE = 'embed'; // switched back to Trillboards native player — SSP fill issues with custom IMA integration
+
+// Embed blocking handled by Java setPlayerMode() — no JS interceptor needed
+var VAST_CONFIG_URL = 'https://api.trillboards.com/v1/partner/vast/config';
+var vastConfig = null;       // cached /vast/config response
+var vastConfigTs = 0;        // when we last fetched it
+var vastConfigTTL = 3600000; // 1 hour default, overridden by cache_ttl_seconds
 var KV_URL='https://trillboards-proxy.johnm-af2.workers.dev/log-impression';
 var CONFIG_URL='https://trillboards-proxy.johnm-af2.workers.dev/get-config';
 var KV_SECRET='curb2026';
-var INTERVAL=30000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=8000,FORCED_SOURCE=0;
-var MAX_PER_MIN=2;
+var INTERVAL=30000,HB_INTERVAL_MS=30000,WATERFALL_TIMEOUT=15000,FORCED_SOURCE=0;
+var MAX_PER_MIN=10; // raised from 2 — waterfall has 6 sources, old cap blocked mid-cycle retries
 var lastCycleMinute=-1,cyclesThisMinute=0;
 var correlator=Date.now();
 var lastImpTime=0;
@@ -278,12 +294,19 @@ var S_hbOk=0,S_hbFail=0;
 var HB_KEY='trb_partner_srddcJroSLYdOrWqSKBksBwc7yyi2R37';
 var HB_URL='https://api.trillboards.com/v1/partner/device/P_691cbdd4b3117cb1b692f4ae/heartbeat';
 var SCREEN_ID='69a076ad2ccbba67a5ba1c1e';
+var EARNER_URL='https://trillboards-proxy.johnm-af2.workers.dev/earner-ads'; // Worker handles JWT auth + token refresh
 var cpmLog=[],fillHistory=[],postHistory=[];
 var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
 
 // ── NEW: server-controlled poll/retry intervals (overridden by /ads response) ──
 var POLL_INTERVAL_S = 60;   // default, overridden by data.poll_interval_s
 var RETRY_ON_ERROR_S = 30;  // default, overridden by data.retry_on_error_s
+
+// Curb fallback toggle — default OFF. Provider's embed has its own VPAID/default-stream
+// fallback path that takes over when SSPs exhaust (once default_stream_enabled=true on
+// their side). We leave that pathway untouched unless this flag is flipped on via remote
+// config: POST {"curb_fallback_enabled": true} to /set-config on the worker.
+var CURB_FALLBACK_ENABLED = false;
 
 function updServerIntervalDisplay() {
   var sp = document.getElementById('s-poll-interval');
@@ -299,6 +322,22 @@ var configPollTimer = null;
 var lastConfigTs = null;
 
 function applyRemoteConfig(cfg) {
+  // Player mode can be switched remotely
+  if(cfg.player_mode==='embed'||cfg.player_mode==='native'){
+    PLAYER_MODE=cfg.player_mode;
+    log('Player mode: '+PLAYER_MODE,'ok');
+    var badge=document.getElementById('player-mode-badge');
+    if(badge){badge.textContent='MODE: '+PLAYER_MODE.toUpperCase();badge.style.color=PLAYER_MODE==='native'?'#0f0':'#4af';}
+    // Tell Java the player mode — Java will create or destroy the embed WebView accordingly
+    if(typeof CurbBridge !== 'undefined' && CurbBridge.setPlayerMode){
+      CurbBridge.setPlayerMode(PLAYER_MODE);
+    }
+    // In native mode ensure embed container is empty — only one player at a time
+    if(PLAYER_MODE==='native'){
+      var fc=document.getElementById('ad-frame-container');
+      if(fc) fc.innerHTML='';
+    }
+  }
   if (!cfg) return;
   REMOTE_CONFIG = cfg;
   if (cfg.floor_cpm != null && !isNaN(cfg.floor_cpm)) {
@@ -329,6 +368,13 @@ function applyRemoteConfig(cfg) {
   }
   if (cfg.config_poll_interval != null && cfg.config_poll_interval >= 30) {
     CONFIG_POLL_MS = parseInt(cfg.config_poll_interval) * 1000;
+  }
+  if (cfg.curb_fallback_enabled != null) {
+    CURB_FALLBACK_ENABLED = !!cfg.curb_fallback_enabled;
+    log('Curb fallback: ' + (CURB_FALLBACK_ENABLED ? 'ENABLED' : 'DISABLED') + ' (remote config)', 'info');
+    if (typeof CurbBridge !== 'undefined' && CurbBridge.setFallbackEnabled) {
+      CurbBridge.setFallbackEnabled(CURB_FALLBACK_ENABLED);
+    }
   }
   lastConfigTs = new Date().toTimeString().substring(0, 8);
   var badge = document.getElementById('config-badge');
@@ -408,13 +454,41 @@ function logToKV(adid, durationSec, completed, impressionId) {
   if (REMOTE_CONFIG.kv_enabled === false) return;
   kvCount++;
   if(completed) kvCompleted++;
-  // Update persistent daily totals
+  var totals = loadTodayTotals();
+  if(completed) {
+    totals.completed++;
+    saveTodayTotals(totals.count, totals.completed);
+    log('KV completed: '+totals.completed+' / requests: '+totals.count, 'info');
+    flushKVBuffer(totals);
+  }
+  // Send per-impression event for breakdown tracking (ima/paid/self_promo/no_fill)
+  // Uses impression_event type so worker increments counters without overwriting totals
+  fetch(KV_URL, {
+    method: 'POST',
+    headers: {'X-Proxy-Secret': KV_SECRET, 'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      type: 'impression_event',
+      screen_id: SCREEN_ID,
+      device_id: DEVICE_ID,
+      ad_type: adTypeThisCycle || 'unknown',
+      source: adid || 'unknown',
+      completed: !!completed,
+      duration_ms: (durationSec || 0) * 1000,
+      impression_id: impressionId || '',
+      timestamp: new Date().toISOString()
+    })
+  }).catch(function(){});
+}
+
+// Call once per ad cycle start (request fired)
+// Saves to localStorage only — KV flush happens on 5-min interval to stay under 1,000 writes/day
+function incKVRequest() {
+  if (REMOTE_CONFIG.kv_enabled === false) return;
   var totals = loadTodayTotals();
   totals.count++;
-  if(completed) totals.completed++;
   saveTodayTotals(totals.count, totals.completed);
-  log('KV today total: '+totals.count+' ('+totals.completed+' completed) | session: '+kvCount, 'info');
-  flushKVBuffer(totals);
+  log('KV request #'+totals.count+' ('+totals.completed+' completed)', 'info');
+  // No KV flush here — handled by 5-min interval
 }
 
 function flushKVBuffer(totals) {
@@ -503,7 +577,17 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
       if(txt&&txt.length>0){log('RESP: '+txt.substring(0,300),'resp');}
       addPostHistory({adid:adid,completed:completed,status:status,attempt:attempt,ts:ts,body:body,resp:txt});
       addEv('imp','IMP '+(completed?'COMPLETE':'START')+' \u2192 '+(ok?'OK':'ERR')+' ('+status+'): '+(adid||'unknown'),'');
-      if(ok){try{var rd=JSON.parse(txt);var impId=(rd.data&&rd.data.proofs&&rd.data.proofs[0])?rd.data.proofs[0].impression_id:'';logToKV(adid,durationSec,completed,impId);}catch(e2){logToKV(adid,durationSec,completed,'');}}
+      if(ok){try{var rd=JSON.parse(txt);var impId=(rd.data&&rd.data.proofs&&rd.data.proofs[0])?rd.data.proofs[0].impression_id:'';
+        // NOTE: rd.data.processed >= 1 ONLY means Trillboards accepted the impression row.
+        // It does NOT mean pixels rendered on screen. We previously marked these as
+        // completed, which produced phantom fills when the WebView was black.
+        // Only trust native ad:completed from OverlayEventBus (sent via onAdOverlayClosed).
+        var trillAccepted = rd.data&&rd.data.processed>=1;
+        if(trillAccepted && !completed){
+          log('Impression accepted by Trillboards API — but NO native ad:completed received; NOT counting as fill','warn');
+          addEv('err','PHANTOM — API accepted but no native ad:completed','');
+        }
+        logToKV(adid,durationSec,completed,impId);}catch(e2){logToKV(adid,durationSec,completed,'');}}
       else{logErrorToKV(adid,durationSec,completed,status,txt);if(attempt<3){var delay=[0,2000,4000,8000][attempt+1]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}}
     });
   }).catch(function(e){
@@ -512,6 +596,22 @@ function sendImpressionWithRetry(adid,durationSec,completed,attempt,fromQueue){
     if(attempt<3){var delay=[2000,4000,8000][attempt]||8000;log('Retrying in '+(delay/1000)+'s','warn');setTimeout(function(){sendImpressionWithRetry(adid,durationSec,completed,attempt+1,fromQueue);},delay);}
     else{log('All retries exhausted — queuing: '+adid,'err');offlineQueue.push({adid:adid,durationSec:durationSec,completed:completed,ts:ts,retries:attempt});updQueueBadge();}
   });
+}
+
+// ── sendEventToAPI — proper event tracking per Partner API spec ──────────────
+// Sends start/firstQuartile/midpoint/thirdQuartile/complete events
+function sendEventToAPI(eventType, adId, durationMs){
+  if(!isOnline) return;
+  var body = JSON.stringify({impressions:[{
+    device_id: DEVICE_ID,
+    ad_id: adId||'unknown',
+    event: eventType,
+    timestamp: new Date().toISOString(),
+    duration_ms: durationMs||0
+  }]});
+  fetch(BATCH_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},body:body})
+  .then(function(r){log('Event ['+eventType+'] → HTTP '+r.status,'ok');})
+  .catch(function(e){log('Event ['+eventType+'] FAIL: '+e.message,'warn');});
 }
 
 function addPostHistory(entry){postHistory.unshift(entry);if(postHistory.length>20)postHistory.pop();rendPostHistory();}
@@ -820,6 +920,16 @@ function applyHideUI(){
 function setFontSize(val){FONT_SIZE=parseInt(val);try{localStorage.setItem('curb_font',val);}catch(e){}['stats-panel','pixel-panel'].forEach(function(id){var p=document.getElementById(id);if(p)p.style.fontSize=val+'px';});var fv=document.getElementById('set-font-val');if(fv)fv.textContent=val;}
 function setBrightness(val){BRIGHTNESS=parseInt(val);try{localStorage.setItem('curb_bright',val);}catch(e){}document.body.style.filter='brightness('+val+'%)';var bv=document.getElementById('set-bright-val');if(bv)bv.textContent=val;}
 function toggleTestMode(){TEST_MODE=!TEST_MODE;try{localStorage.setItem('curb_test',TEST_MODE?'1':'0');}catch(e){}var btn=document.getElementById('set-test-btn');if(btn){btn.textContent=TEST_MODE?'ON':'OFF';btn.style.color=TEST_MODE?'#0f0':'#aaa';}log('Test mode '+(TEST_MODE?'ON':'OFF'),'ok');}
+function resetTodayKV(){
+  try{
+    var key=getTodayKey();
+    localStorage.setItem(key,JSON.stringify({count:0,completed:0}));
+    kvCount=0;kvCompleted=0;
+    flushKVBuffer({count:0,completed:0});
+    log('Today KV counters reset to 0','ok');
+    flashSaved();
+  }catch(e){log('KV reset error: '+e.message,'err');}
+}
 function clearStats(){S={req:0,fills:0,err:0,done:0,imp:0,dead:0,src:'-',adv:'-'};srcStats={};pixEv=[];pixDest={};logs=[];cpmLog=[];fillHistory=[];postHistory=[];offlineQueue=[];for(var i=0;i<24;i++)fillByHour[i]={fills:0,reqs:0};updStats();rendEv();rendLog();rendLF();rendCpmLog();rendPostHistory();log('Stats cleared','ok');flashSaved();}
 function reloadSources(){toggleSettings();log('Reloading waterfall sources...','info');fetchSources(false);}
 function toggleStats(){document.getElementById('stats-panel').classList.toggle('open')}
@@ -840,70 +950,100 @@ function startWatchdog(ms){
     log('WATCHDOG: '+(s?s.name:'?')+' timed out after '+ms/1000+'s — moving on','warn');
     if(s){srcStats[s.name].err++;S.err++;}
     playing=false;
+    adPlaying=false; // FIX: reset adPlaying so showAdFrame() is not permanently blocked
     if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
     rebuildLoader();idx++;updStats();reqNext();
   },ms);
 }
 function sched(ms){clearTimeout(nextTimer);cdown=Date.now()+ms;nextTimer=setTimeout(reqNext,ms)}
 
-// ── MODIFIED: fetchSources now picks up poll_interval_s, retry_on_error_s,
-//    and vast_urls[] from the /ads response. Error path uses RETRY_ON_ERROR_S.
-//    afterCycle=true means IMA is already inited — skip initIMA(), go to reqNext().
-function fetchSources(background, afterCycle){
-  log((background?'Background':'Fetching')+' waterfall sources...','info');trackBytes('api','api',2048);
-  if(!background)setNP('FETCHING...','Calling API');
-  var adsParams='?slot_w='+window.innerWidth+'&slot_h='+window.innerHeight+'&orientation=landscape&muted=0&autoplay=1&ua='+encodeURIComponent(navigator.userAgent);
-  fetch(API_URL+adsParams,{headers:{'Authorization':'Bearer '+API_KEY}})
-  .then(function(r){return r.json()})
+// ── Earner API fetch via Worker (handles JWT auth + refresh) ─────────────────
+// Worker at /earner-ads returns pre-built waterfall sources ready for IMA
+var earnerCache = null;
+var earnerCacheTs = 0;
+var earnerCacheTTL = 1800000; // 30 min — refresh every 30 min, not every cycle
+
+function fetchEarnerSources(callback) {
+  var now = Date.now();
+  if (earnerCache && (now - earnerCacheTs) < earnerCacheTTL) {
+    log('Earner sources from cache ('+earnerCache.sources.length+' sources)','info');
+    callback(earnerCache);
+    return;
+  }
+  log('Fetching earner waterfall from Worker...','info');
+  trackBytes('api','api',512);
+  // Pass playerTruth params — match what screen.trillboards.com sends to earner API
+  // These signals affect VAST URL targeting and IVT scoring on their backend
+  var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  var connType = (conn && (conn.type || conn.effectiveType)) || 'wifi';
+  var devMem = navigator.deviceMemory ? String(navigator.deviceMemory) : '4';
+  var platHint = (navigator.userAgentData && navigator.userAgentData.platform) ? navigator.userAgentData.platform : 'Android';
+  var slotW = window.innerWidth || 1333;
+  var slotH = window.innerHeight || 800;
+  var earnerParams = '?screen_id='+SCREEN_ID
+    +'&slot_w='+slotW
+    +'&slot_h='+slotH
+    +'&muted=0'
+    +'&autoplay=1'
+    +'&connection_type='+encodeURIComponent(connType)
+    +'&device_memory='+devMem
+    +'&platform_hint='+encodeURIComponent(platHint)
+    +'&_='+now;
+  fetch(EARNER_URL + earnerParams)
+  .then(function(r){ return r.json(); })
   .then(function(data){
-    // NEW: pick up server-controlled timing fields
-    if(data.poll_interval_s){POLL_INTERVAL_S=data.poll_interval_s;updServerIntervalDisplay();}
-    if(data.retry_on_error_s){RETRY_ON_ERROR_S=data.retry_on_error_s;updServerIntervalDisplay();}
-
-    // NEW: support vast_urls[] array in addition to existing vast_waterfall structure
-    var gotSources=false;
-    if(data.vast_urls&&data.vast_urls.length){
-      sources=data.vast_urls.map(function(url,i){return{name:'source_'+(i+1),vast_url:url,priority:i+1,timeout_ms:WATERFALL_TIMEOUT};});
-      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
-      log('Got '+sources.length+' sources from vast_urls[]'+(background?' (background)':''),'ok');
-      gotSources=true;
-    } else if(data.success&&data.data&&data.data.header_bidding_settings&&data.data.header_bidding_settings.vast_waterfall){
-      sources=data.data.header_bidding_settings.vast_waterfall.sources;
-      sources.sort(function(a,b){return a.priority-b.priority});
-      sources.forEach(function(s){if(!srcStats[s.name])srcStats[s.name]={req:0,fills:0,err:0}});
-      log('Got '+sources.length+' sources from vast_waterfall'+(background?' (background)':''),'ok');
-      gotSources=true;
-    }
-
-    if(gotSources){
+    if (data.success && data.data && data.data.sources && data.data.sources.length > 0) {
+      earnerCache = data.data;
+      earnerCacheTs = Date.now();
+      // Update sources array for stats panel
+      sources = data.data.sources.map(function(s){
+        return { name: s.name, vast_url: s.vast_url, timeout_ms: s.timeout_ms, priority: s.priority };
+      });
+      sources.forEach(function(s){ if(!srcStats[s.name]) srcStats[s.name]={req:0,fills:0,err:0}; });
+      if (data.data.ad_interval_ms) INTERVAL = data.data.ad_interval_ms;
+      log('Earner API OK — '+sources.length+' sources, interval '+Math.round(INTERVAL/1000)+'s','ok');
+      var badge = document.getElementById('config-badge');
+      if(badge) badge.textContent = 'EARNER: OK '+new Date().toTimeString().substring(0,8);
       rendSrc();
-      if(afterCycle){
-        // IMA already inited — just reset index and go
-        idx=0;rebuildLoader();
-        setNP('WAITING','Next in '+POLL_INTERVAL_S+'s');
-        sched(POLL_INTERVAL_S*1000);
-      } else if(!background){
-        initIMA();
-      }
+      callback(earnerCache);
     } else {
-      log('No sources — retry in '+RETRY_ON_ERROR_S+'s','warn');
-      if(!background){setNP('NO SOURCES','Retrying in '+RETRY_ON_ERROR_S+'s');sched(RETRY_ON_ERROR_S*1000);}
+      log('Earner API: no sources — '+JSON.stringify(data).substring(0,100),'err');
+      callback(null);
     }
-  }).catch(function(e){
-    // NEW: use RETRY_ON_ERROR_S instead of hardcoded 30000
-    log('API error: '+e.message+' — retry in '+RETRY_ON_ERROR_S+'s','err');
-    if(!background&&!afterCycle){setNP('API ERROR',e.message);} 
-    sched(RETRY_ON_ERROR_S*1000);  // always re-arm, never die
-  })}
+  })
+  .catch(function(e){
+    log('Earner fetch failed: '+e.message,'err');
+    callback(null);
+  });
+}
+
+// ── fetchSources: wrapper around earner API ───────────────────────────────────
+function fetchSources(background, afterCycle){
+  log((background?'Background refresh':'Fetching')+' earner waterfall...','info');
+  fetchEarnerSources(function(cfg){
+    if(!cfg){
+      log('No earner sources — retry in '+RETRY_ON_ERROR_S+'s','warn');
+      if(!background) { setNP('NO SOURCES','Retrying in '+RETRY_ON_ERROR_S+'s'); sched(RETRY_ON_ERROR_S*1000); }
+      return;
+    }
+    if(afterCycle){
+      setNP('WAITING','Next ad in '+Math.round(INTERVAL/1000)+'s');
+      sched(INTERVAL);
+    } else if(!background){
+      initIMA();
+    }
+  });
+}
 
 function initIMA(){
-  log('IMA ready','ok');
+  log('IMA init','ok');
   adDisplayContainer=new google.ima.AdDisplayContainer(adDiv,vid);
   adDisplayContainer.initialize();
   adsLoader=new google.ima.AdsLoader(adDisplayContainer);
   adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
   adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
-  idx=0;reqNext()}
+  idx=0; reqNext();
+}
 
 function rebuildLoader(){
   if(adsManager){try{adsManager.destroy();}catch(e){}adsManager=null;}
@@ -911,104 +1051,233 @@ function rebuildLoader(){
   adsLoader=new google.ima.AdsLoader(adDisplayContainer);
   adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,onLoaded,false);
   adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
-  log('Loader rebuilt','info');}
+  log('Loader rebuilt','info');
+}
+
+var REAL_GAID = 'a7c717bf-7839-4f98-9384-10ca1ad1abe1'; // SM-T500 real Android Advertising ID
+
+function buildVastUrl(){
+  // URLs come pre-built from earner API — just fill cachebuster and correlator
+  var s = sources[idx] || sources[0];
+  if(!s || !s.vast_url) return null;
+  var cb = Date.now()+''+Math.floor(Math.random()*99999);
+  var url = s.vast_url
+    .replace(/%%CACHEBUSTER%%/g, cb)
+    .replace(/\[CACHEBUSTER\]/g, cb)
+    .replace(/correlator=(?=&|$)/, 'correlator='+cb)
+    .replace(/correlator=$/, 'correlator='+cb)
+    // FIX: replace screen ID used as device ad ID with real Android GAID
+    .replace(/rdid=69a076ad2ccbba67a5ba1c1e/g, 'rdid='+REAL_GAID)
+    .replace(/ifa=69a076ad2ccbba67a5ba1c1e/g, 'ifa='+REAL_GAID)
+    // FIX: correct idtype to adid (Android GAID) — dpid/ppid causes SSP rejections
+    .replace(/idtype=dpid/g, 'idtype=adid')
+    .replace(/idtype=ppid/g, 'idtype=adid');
+  log('VAST URL ('+s.name+'): '+url.substring(0,80)+'...','info');
+  return url;
+}
 
 function reqNext(){
-  clearTimeout(nextTimer);cdown=null;st('s-next','-');
-  correlator=Date.now();  // fresh correlator every request
-  var hour=new Date().getHours();
-  if(idx>=sources.length){
-    fillHistory.push(0);fillByHour[hour].reqs++;
-    log('All exhausted — retry in '+INTERVAL/1000+'s','warn');
-    setNP('NO FILL','All sources failed — retry in '+INTERVAL/1000+'s');
-    idx=0;rebuildLoader();updStats();sched(INTERVAL);return}
+  clearTimeout(nextTimer); cdown=null; st('s-next','-');
+  correlator = Date.now();
+  var hour = new Date().getHours();
+
+  // Rate cap — only applies to cycle starts (idx===0), not waterfall advances
   if(idx===0){
-    var nowMin=Math.floor(Date.now()/60000);
-    if(nowMin!==lastCycleMinute){lastCycleMinute=nowMin;cyclesThisMinute=0;}
-    if(cyclesThisMinute>=MAX_PER_MIN){log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn');sched(INTERVAL);return;}
-    cyclesThisMinute++;S.req++;updStats();
-    if(REMOTE_CONFIG.kv_enabled!==false){fetch(KV_URL,{method:'POST',headers:{'X-Proxy-Secret':KV_SECRET,'Content-Type':'application/json'},body:JSON.stringify({type:'request',ad_id:'',screen_id:SCREEN_ID,device_id:DEVICE_ID,duration_ms:0,completed:false,impression_id:''})}).catch(function(){});}
+    var nowMin = Math.floor(Date.now()/60000);
+    if(nowMin !== lastCycleMinute){ lastCycleMinute=nowMin; cyclesThisMinute=0; }
+    if(cyclesThisMinute >= MAX_PER_MIN){ log('Rate cap hit ('+MAX_PER_MIN+'/min) — holding','warn'); sched(INTERVAL); return; }
+    cyclesThisMinute++; S.req++; updStats();
+    incKVRequest();
   }
-  var s=sources[idx];
-  log('Requesting: '+s.name,'info');setNP('REQUESTING...',s.name+' - priority '+s.priority);
-  srcStats[s.name].req++;
-  var req=new google.ima.AdsRequest();
-  var sep=s.vast_url.indexOf('?')>=0?'&':'?';
-  var geoStr=(gpsLat&&gpsLng)?'&lat='+gpsLat+'&long='+gpsLng+'&venuetype=4':'';
-  req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,correlator)+sep+'correlator='+correlator+'&ppid='+SCREEN_ID+geoStr;
-  req.linearAdSlotWidth=req.nonLinearAdSlotWidth=window.innerWidth;
-  req.linearAdSlotHeight=req.nonLinearAdSlotHeight=window.innerHeight;
-  var cb=Date.now()+''+Math.floor(Math.random()*99999);  // unique cachebuster per request
-  req.adTagUrl=s.vast_url.replace(/%%CACHEBUSTER%%/g,cb);
-  // Let IMA attempt all sources including VPAID — tracking pixels fire even on 901 errors
-  try{adsLoader.requestAds(req);startWatchdog(s.timeout_ms||WATERFALL_TIMEOUT);}catch(e){log('Threw: '+s.name+' '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
+
+  // If earner sources not loaded yet, fetch via fetchSources to ensure initIMA runs
+  if(!earnerCache || sources.length === 0){
+    log('Earner sources not loaded — fetching...','info');
+    fetchSources(false, false); // goes through initIMA → reqNext
+    return;
+  }
+
+  // If IMA not initialized yet, init it now
+  if(!adsLoader){
+    log('IMA not initialized — calling initIMA','info');
+    initIMA();
+    return;
+  }
+
+  if(idx >= sources.length){
+    fillHistory.push(0); fillByHour[hour].reqs++;
+    log('All sources exhausted — retry in '+Math.round(INTERVAL/1000)+'s','warn');
+    setNP('NO FILL','All sources failed — retry in '+Math.round(INTERVAL/1000)+'s');
+    idx=0; earnerCache=null; earnerCacheTs=0; // invalidate cache so next cycle gets fresh sources
+    rebuildLoader(); updStats(); sched(INTERVAL); return;
+  }
+
+  var vastUrl = buildVastUrl();
+  if(!vastUrl){ log('Could not build VAST URL','err'); sched(RETRY_ON_ERROR_S*1000); return; }
+
+  var s = sources[idx];
+  log('Requesting: '+s.name+' ('+idx+'/'+sources.length+')','info');
+  setNP('REQUESTING...',s.name+' priority '+s.priority);
+  if(srcStats[s.name]) srcStats[s.name].req++;
+
+  fillByHour[hour].reqs++;
+
+  // ── CLIENT-DIRECT VAST FETCH FROM DEVICE ────────────────────────────────
+  // Fetch VAST XML directly from the device — device IP hits SSP, not Cloudflare
+  // DSPs flag server farm IPs as GIVT — must come from the real tablet IP
+  var directVastUrl = s.vast_url
+    .replace(/%%CACHEBUSTER%%/g, Date.now()+''+Math.floor(Math.random()*99999))
+    .replace(/\[CACHEBUSTER\]/g, Date.now()+''+Math.floor(Math.random()*99999))
+    .replace(/rdid=69a076ad2ccbba67a5ba1c1e/g, 'rdid='+REAL_GAID)
+    .replace(/ifa=69a076ad2ccbba67a5ba1c1e/g, 'ifa='+REAL_GAID)
+    .replace(/idtype=dpid/g, 'idtype=adid')
+    .replace(/idtype=ppid/g, 'idtype=adid');
+
+  var controller = new AbortController();
+  var fetchTimeout = setTimeout(function(){ controller.abort(); }, Math.max(s.timeout_ms||0, WATERFALL_TIMEOUT));
+
+  log('Fetching VAST XML direct from device: '+s.name,'info');
+  fetch(directVastUrl, { credentials: 'omit', mode: 'cors', signal: controller.signal })
+  .then(function(r){
+    clearTimeout(fetchTimeout);
+    if(!r.ok){ throw new Error('HTTP '+r.status); }
+    return r.text();
+  })
+  .then(function(vastXml){
+    // Match Trillboards player: check for <Ad element, not just length
+    if(!vastXml || vastXml.indexOf('<Ad') === -1){
+      throw new Error('Empty VAST (no Ad element, '+vastXml.length+' bytes)');
+    }
+    // Skip VPAID — IMA on Android WebView cannot render JavaScript creatives
+    if(vastXml.indexOf('apiFramework="VPAID"') >= 0 || vastXml.indexOf("apiFramework='VPAID'") >= 0){
+      throw new Error('VPAID creative — not renderable in WebView, skipping');
+    }
+    log('VAST XML fetched ('+vastXml.length+' bytes) — passing to IMA via adsResponse','ok');
+    var req = new google.ima.AdsRequest();
+    // Pass raw XML inline — IMA never fetches from device
+    req.adsResponse = vastXml;
+    req.linearAdSlotWidth = window.innerWidth;
+    req.linearAdSlotHeight = window.innerHeight;
+    req.nonLinearAdSlotWidth = 0;
+    req.nonLinearAdSlotHeight = 0;
+    if(typeof req.setContinuousPlayback === 'function') req.setContinuousPlayback(true);
+    if(typeof req.setAdWillAutoPlay === 'function') req.setAdWillAutoPlay(true);
+    if(typeof req.setAdWillPlayMuted === 'function') req.setAdWillPlayMuted(false);
+    req.vastLoadTimeout = 15000;
+    try{ adsLoader.requestAds(req); startWatchdog(Math.max(s.timeout_ms||0, WATERFALL_TIMEOUT)); }
+    catch(e){ log('IMA request threw: '+e.message,'err'); if(srcStats[s.name])srcStats[s.name].err++; S.err++; rebuildLoader(); idx++; setTimeout(function(){reqNext();},300); }
+  })
+  .catch(function(e){
+    log('VAST fetch failed for '+s.name+': '+e.message+' — skipping','err');
+    if(srcStats[s.name])srcStats[s.name].err++;
+    S.err++; fillHistory.push(0);
+    rebuildLoader(); idx++;
+    setTimeout(function(){reqNext();}, 300);
+  });
+}
 
 function onLoaded(event){
-  var s=sources[idx];log('Manager loaded: '+s.name,'ok');
+  var s=sources[idx]||sources[0]||{name:'google_gam'};
+  log('Manager loaded: '+s.name+' (idx='+idx+')','ok');
   if(adsManager){try{adsManager.destroy()}catch(e){}}
   adsManager=event.getAdsManager(vid);
   adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,onErr,false);
   adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED,onDone,false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';setNP('LOADED: '+s.name.toUpperCase(),((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.LOADED,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad){var dur=ad.getDuration?Math.round(ad.getDuration())+'s':'?s';setNP('LOADED: GOOGLE GAM',((ad.getTitle&&ad.getTitle())||'Ad')+' - '+dur)}},false);
   adsManager.addEventListener(google.ima.AdEvent.Type.STARTED,function(){
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;
     cachedAdId='';cachedAid='';cachedDur=0;cacheAdInfo(ad);
     var adv=(ad&&ad.getAdvertiserName&&ad.getAdvertiserName())||'?';var dur=cachedDur?cachedDur+'s':'?s';var hour=new Date().getHours();
     log('STARTED - '+s.name+' - '+adv+' - id:'+cachedAdId,'ok');addEv('start','AD START - '+s.name+' - '+adv+' - '+dur,'');
-    srcStats[s.name].fills++;S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;fillByHour[hour].reqs++;
+    if(srcStats[s.name]){srcStats[s.name].fills++;}S.fills++;S.src=s.name;S.adv=adv;fillHistory.push(1);fillByHour[hour].fills++;
     clearWatchdog();playing=true;adT0=Date.now();if(cachedDur>0){trackBytes('video','video',cachedDur*50000);DU.adDurs.push(cachedDur);}
     document.getElementById('ad-container').style.display='block';
     document.getElementById('idle-screen').style.display='none';
-    setNP('PLAYING: '+s.name.toUpperCase(),adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);},false);
+    setNP('PLAYING: GOOGLE GAM',adv+' - '+dur);logAdCpm(ad,s.name,adv);updStats();if(ad)dumpAdMeta(ad);
+    // Send start event per API spec
+    sendEventToAPI('start', cachedAdId||'unknown', (cachedDur||0)*1000);
+  },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.IMPRESSION,function(){
     S.imp++;updStats();addEv('imp','IMPRESSION FIRED - '+s.name,'');
     var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);
     sendImpressionWithRetry(cachedAdId||'unknown',cachedDur||0,false,0,false);},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){addEv('q','25% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){addEv('q','50% - '+s.name,'')},false);
-  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);addEv('q','75% - '+s.name,'');},false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.FIRST_QUARTILE,function(){
+    addEv('q','25% - '+s.name,'');
+    sendEventToAPI('firstQuartile', cachedAdId||'unknown', (cachedDur||0)*1000);
+  },false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.MIDPOINT,function(){
+    addEv('q','50% - '+s.name,'');
+    sendEventToAPI('midpoint', cachedAdId||'unknown', (cachedDur||0)*1000);
+  },false);
+  adsManager.addEventListener(google.ima.AdEvent.Type.THIRD_QUARTILE,function(){
+    var ad=adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);
+    addEv('q','75% - '+s.name,'');
+    sendEventToAPI('thirdQuartile', cachedAdId||'unknown', (cachedDur||0)*1000);
+  },false);
   adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE,function(){
     try{var ad=adsManager&&adsManager.getCurrentAd?adsManager.getCurrentAd():null;if(ad)cacheAdInfo(ad);}catch(e){}
     if(!cachedAdId||cachedAdId==='unknown'){log('COMPLETE — ad ID still unknown, sending with cached: '+cachedAdId,'warn');}
     var p=adT0?Math.round((Date.now()-adT0)/1000)+'s':'?';
     log('COMPLETE - '+s.name+' - '+p+' - adid:'+cachedAdId,'ok');addEv('done','COMPLETE - '+s.name+' - '+p,'');
-    S.done++;updStats();resolveAdAndSend(true,10);correlator=Date.now();},false);
+    S.done++;updStats();
+    sendEventToAPI('complete', cachedAdId||'unknown', (cachedDur||0)*1000);
+    resolveAdAndSend(true,10);correlator=Date.now();},false);
   try{
     var rs=new google.ima.AdsRenderingSettings();rs.uiElements=[];rs.skipDelay=-1;rs.disableUi=true;
     rs.mimeTypes=['video/mp4','video/webm','video/3gpp','application/javascript'];
-    rs.loadVideoTimeout=15000;
+    rs.loadVideoTimeout=20000; // raised from 8s — matches Trillboards player
     rs.enablePreloading=true;
+    rs.bitrate=2000; // explicit bitrate hint for CTV — matches Trillboards player
+    rs.restoreCustomPlaybackStateOnAdBreakComplete=true; // CTV playlist signal
     adsManager.updateAdsRenderingSettings(rs);
     adsManager.init(window.innerWidth,window.innerHeight,google.ima.ViewMode.FULLSCREEN);
     adsManager.start();
     setTimeout(function(){var style=document.createElement('style');style.innerHTML='.ima-skip-button{display:none!important;visibility:hidden!important;}.ima-controls-div{display:none!important;}.ima-mute-button{display:none!important;}.ima-pause-button{display:none!important;}[class*="skip"]{display:none!important;}[class*="pause"]{display:none!important;}[id*="skip"]{display:none!important;}';document.head.appendChild(style);},500);
-    idx=0;
-  }catch(e){log('Start err: '+e.message,'err');srcStats[s.name].err++;S.err++;rebuildLoader();idx++;reqNext()}}
+    // do NOT reset idx here — keep waterfall position until cycle completes
+  }catch(e){log('Start err: '+e.message,'err');if(srcStats[s.name])srcStats[s.name].err++;S.err++;rebuildLoader();idx++;setTimeout(function(){reqNext();},300);}}
 
 function onErr(event){
-  clearWatchdog();var s=sources[idx];
+  clearWatchdog();
+  var s=sources[idx]||sources[0]||{name:'google_gam'}; // snapshot s NOW before idx changes
+  var sName=s.name; // capture name immediately — idx may advance before callbacks fire
   var er=event.getError?event.getError().toString():'unknown';
   var erCode=event.getError&&event.getError().getErrorCode?event.getError().getErrorCode():0;
   var noFill=(erCode===303||erCode===1205||er.indexOf('empty')>=0||er.indexOf('no ad')>=0||er.indexOf('VAST_EMPTY')>=0);
-  log((noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+' ['+erCode+'] - '+er.substring(0,60),'err');
-  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+(s?s.name:'?')+(noFill?' (empty VAST)':' ('+erCode+')'),'');
-  if(s){srcStats[s.name].err++;S.err++}
+  log((noFill?'NO FILL':'IMA ERROR')+' - '+sName+' ['+erCode+'] - '+er.substring(0,60),'err');
+  addEv('err',(noFill?'NO FILL':'IMA ERROR')+' - '+sName+(noFill?' (empty VAST)':' ('+erCode+')'),'');
+  if(srcStats[sName]){srcStats[sName].err++;}
+  S.err++;fillHistory.push(0);
   playing=false;
+  adPlaying=false; // FIX: reset adPlaying so showAdFrame() is not permanently blocked
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
-  if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null}
-  rebuildLoader();idx++;updStats();setTimeout(reqNext,500)}
+  if(adsManager){try{adsManager.destroy()}catch(e){}adsManager=null;}
+  rebuildLoader(); updStats();
+  if(noFill){
+    log('No fill on '+sName+' — trying next source','warn');
+    idx++;
+    setTimeout(function(){reqNext();}, 300);
+  } else {
+    // Hard error — skip this source
+    idx++;
+    setTimeout(function(){reqNext();}, 300);
+  }
+}
 
-// ── MODIFIED: onDone now re-fetches /ads after each cycle instead of blind sched()
-//    This picks up fresh vast_urls[], poll_interval_s, and retry_on_error_s every cycle.
 function onDone(){
-  clearWatchdog();  // prevent watchdog race
-  log('Cycle done — re-fetching /ads for next cycle','info');
+  clearWatchdog();
+  log('Ad cycle complete','info');
   playing=false;
+  adPlaying=false;
+  // Signal IMA content is done — matches Trillboards player, enables clean subsequent ad requests
+  try{ if(adsLoader) adsLoader.contentComplete(); }catch(e){}
+  idx=0; // reset waterfall index for next cycle
   document.getElementById('ad-container').style.display='none';
   document.getElementById('idle-screen').style.display='flex';
   updStats();
-  fetchSources(true, true);  // background=true (no initIMA), afterCycle=true (use poll_interval_s)
+  setNP('IDLE','Next ad in '+Math.round(INTERVAL/1000)+'s');
+  rebuildLoader();
+  sched(INTERVAL);
 }
 
 document.addEventListener('click',function(e){
@@ -1029,73 +1298,189 @@ function startGPS(){
 // ── IFRAME AD LOOP (Trillboards embed) ───────────────────────────────────────
 var EMBED_URL  = 'https://screen.trillboards.com?fp='+DEVICE_ID+'&ctv=1&autoplay=1';
 var adPlaying  = false;
-var adStartedThisCycle = false;  // true if ad_started fired this cycle
+var adTypeThisCycle   = 'unknown'; // ima | paid | self_promo
+var adSourceThisCycle = 'unknown'; // adipolo | vidverto | etc
+
+// Called by Java when ad detail is available from minimalAdvertisementOverlay
+function onAdDetail(source, adType, adId) {
+  adSourceThisCycle = source || 'unknown';
+  adTypeThisCycle   = adType  || 'unknown';
+  log('Ad detail — source:'+source+' type:'+adType+' id:'+adId, 'ok');
+}
+
+// Called by Java on safety-watchdog fire with per-SSP attribution stats
+// for the 5-min cycle that just ended. Also mirrored to global for dashboard
+// scraping and optional POST to the backend.
+var latestSspStats = null;
+function onSspStats(jsonStr) {
+  try {
+    latestSspStats = JSON.parse(jsonStr);
+    var s = latestSspStats;
+    var by = s.bySource || {};
+    var parts = [];
+    Object.keys(by).forEach(function(k){
+      var b = by[k];
+      parts.push(k+' att='+b.attempts+' 303='+b.code303+' err='+b.otherErrors+' fill='+b.fills);
+    });
+    log('SSP breakdown ['+s.window_s+'s] imaErr='+s.imaErrors+' 303='+s.code303+
+        ' waterfallExhaust='+s.waterfallExhausts+' adStarted='+s.adStarted+
+        (parts.length?' | '+parts.join(' | '):' | no-per-source-data'), 'warn');
+    addEv('err','SSP '+s.code303+'/'+s.imaErrors+' 303s, '+s.waterfallExhausts+' exhausts',parts.join(';'));
+  } catch(e) {
+    log('onSspStats parse error: '+e.message, 'err');
+  }
+}
+var adStartedThisCycle = false;
 var adWatchdog = null;
 
 function showAdFrame() {
+  if(PLAYER_MODE === 'native') {
+    log('Native player mode — fetching earner waterfall', 'info');
+    setNP('FETCHING...', 'Earner API via Worker');
+    fetchSources(false, false);
+    return;
+  }
+
   if(adPlaying) return;
+
+  // ── EMBED MODE: their native WebView overlay ─────────────────────────────
   adPlaying = true;
-  log('Launching Trillboards native overlay', 'info');
-  setNP('LOADING AD...', 'via Trillboards');
+  log('Launching Trillboards embed overlay', 'info');
+  setNP('LOADING AD...', 'via Trillboards embed');
   addEv('start', 'AD OVERLAY LAUNCHED', '');
-  // Call native CurbBridge to open their player as a native WebView on top
+  incKVRequest(); // count this as a request
   if(typeof CurbBridge !== 'undefined') {
     CurbBridge.showAd();
+    log('CurbBridge.showAd() called — expect ad_started within 10s', 'info');
+    // #10 Startup diagnostic — if native ad:started never fires, surface it loudly
+    var startupCheck = setTimeout(function(){
+      if(!adStartedThisCycle) {
+        log('NO ad_started 10s after CurbBridge.showAd() — native overlay may be stuck or embed has no fill', 'err');
+        addEv('err', 'DIAGNOSTIC — no ad_started 10s after showAd()', '');
+      }
+    }, 10000);
+    // Clear the diagnostic if cycle closes early
+    var _origClose = closeAdFrame;
+    // Single-shot patch: clear the timer in the next close path via watchdog chain
+    adWatchdog = setTimeout(function(){ clearTimeout(startupCheck); }, 11000);
   } else {
-    // Fallback to iframe if native bridge not available (browser testing)
     log('CurbBridge not available — using iframe fallback', 'warn');
-    var frame = document.getElementById('ad-frame');
+    // Create iframe fresh each time — never exists in DOM in native mode
+    var container = document.getElementById('ad-frame-container');
+    var frame = document.createElement('iframe');
+    frame.id = 'ad-frame';
+    frame.allow = 'autoplay; fullscreen; geolocation';
+    frame.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:5000';
+    // #9 iframe error detection — previously silent
+    frame.onload  = function(){ log('Embed iframe loaded: '+frame.src.substring(0,80),'ok'); };
+    frame.onerror = function(){
+      log('Embed iframe failed to load — showing Curb fallback','err');
+      addEv('err','IFRAME LOAD FAILED','');
+      showCurbFallback('iframe_load_failed');
+      setTimeout(function(){ closeAdFrame('iframe_error', 0, false); }, 10000);
+    };
+    container.innerHTML = '';
+    container.appendChild(frame);
     frame.src = EMBED_URL + '&t=' + Date.now();
-    frame.style.display = 'block';
     document.getElementById('idle-screen').style.display = 'none';
     adWatchdog = setTimeout(function(){
+      log('Iframe watchdog — 45s with no ad:started, closing','err');
       closeAdFrame('watchdog', 0, false);
     }, 45000);
   }
 }
 
-// Called by MainActivity when native overlay closes
-function onAdOverlayClosed(completed) {
-  log('Native overlay closed completed='+completed, 'ok');
-  // If ad started but completion event never fired, treat as completed
+function onAdOverlayClosed(completed, source, durationSec) {
+  source = source || 'trillboards';
+  durationSec = durationSec || 30;
+  log('Native overlay closed completed='+completed+' source='+source, 'ok');
   var wasCompleted = completed || adStartedThisCycle;
   if(adStartedThisCycle && !completed) log('Ad started but no complete event — treating as completed', 'warn');
   adStartedThisCycle = false;
-  closeAdFrame('trillboards', 30, wasCompleted);
+  closeAdFrame(adSourceThisCycle || source, durationSec, wasCompleted);
+  adTypeThisCycle = 'unknown'; adSourceThisCycle = 'unknown';
 }
 
 function handleOverlayLog(msg) {
-  // Ad started playing
   if(msg.indexOf('STARTED') >= 0 || msg.indexOf('AD_STARTED') >= 0 || msg.indexOf('ad_start') >= 0) {
     clearTimeout(adWatchdog);
     log('Overlay: ad started detected', 'ok');
     addEv('start', 'AD PLAYING via overlay', '');
     setNP('PLAYING', 'Trillboards');
     S.fills++; updStats();
-    // Set a completion watchdog for max ad duration
     adWatchdog = setTimeout(function(){
       log('Ad completion watchdog — closing iframe', 'warn');
       closeAdFrame('completed', 30, true);
     }, 60000);
   }
-  // Waterfall exhausted — no fill, close fast
   if(msg.indexOf('waterfallExhausted":true') >= 0 || msg.indexOf('waterfall_exhausted') >= 0) {
-    log('Overlay: waterfall exhausted — no fill', 'warn');
-    addEv('err', 'NO FILL — waterfall exhausted', '');
+    log('Overlay: waterfall exhausted — rendering Curb fallback','warn');
+    addEv('err', 'NO FILL — waterfall exhausted, Curb fallback', '');
     S.err++; updStats();
     clearTimeout(adWatchdog);
-    // Close iframe quickly and retry after interval
-    setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 500);
+    // Short grace window for provider content cache (~5s) then take over with Curb fallback
+    adWatchdog = setTimeout(function(){
+      showCurbFallback('waterfall_exhausted');
+      // hold fallback 20s then close and continue cycle
+      setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 20000);
+    }, 5000);
   }
-  // Ad complete
   if(msg.indexOf('COMPLETE') >= 0 && msg.indexOf('Overlay') >= 0) {
     clearTimeout(adWatchdog);
     log('Overlay: ad complete detected', 'ok');
     closeAdFrame('completed', 30, true);
   }
-  // Socket disconnect after waterfall — also signals end
   if(msg.indexOf('Socket disconnected') >= 0 && adPlaying) {
     log('Overlay: socket disconnect — checking state', 'info');
+  }
+}
+
+// ── Curb fallback screen (shown when waterfall exhausts or embed is unresponsive) ──
+// TODO: replace this URL with a real Curb-branded MP4 hosted on your CDN.
+// Must be HTTPS, muted-autoplay friendly, H.264 MP4 for WebView compatibility.
+var CURB_FALLBACK_VIDEO = 'https://www.w3schools.com/html/mov_bbb.mp4';
+
+function showCurbFallback(reason){
+  if (!CURB_FALLBACK_ENABLED) {
+    log('showCurbFallback skipped — disabled by remote config (reason='+reason+')', 'info');
+    return;
+  }
+  try {
+    var idle = document.getElementById('idle-screen');
+    if(!idle) return;
+    idle.innerHTML =
+      '<div style="position:absolute;top:0;left:0;width:100%;height:100%;background:#000">'+
+      '  <video id="curb-fallback-video" autoplay muted loop playsinline '+
+      '         style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1" '+
+      '         src="'+CURB_FALLBACK_VIDEO+'"></video>'+
+      '  <div style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;'+
+      '              background:linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(0,0,0,0.85) 100%);'+
+      '              pointer-events:none"></div>'+
+      '  <div style="position:absolute;bottom:40px;left:0;right:0;text-align:center;z-index:3;'+
+      '              font-family:monospace;color:#fff">'+
+      '    <div style="font-size:56px;letter-spacing:14px;font-weight:bold">CURB</div>'+
+      '    <div style="font-size:14px;color:#0fc;letter-spacing:4px;margin-top:4px">HOUSE AD — NO FILL</div>'+
+      '    <div style="font-size:10px;color:#666;margin-top:6px">'+reason+'</div>'+
+      '  </div>'+
+      '</div>';
+    idle.style.display = 'flex';
+    // Force play in case autoplay was blocked
+    var v = document.getElementById('curb-fallback-video');
+    if(v) {
+      v.onerror = function(){ log('Curb fallback video failed to load: '+CURB_FALLBACK_VIDEO, 'err'); };
+      v.onplaying = function(){ log('Curb fallback video playing', 'ok'); };
+      var pp = v.play();
+      if(pp && typeof pp.catch === 'function') pp.catch(function(e){
+        log('Curb fallback autoplay rejected: '+e.message, 'warn');
+      });
+    }
+    // Hide the provider iframe if one exists; native WebView is hidden by Java on dismiss
+    var container = document.getElementById('ad-frame-container');
+    if(container) container.innerHTML = '';
+    setNP('HOUSE AD', 'Curb fallback — '+reason);
+    log('Curb fallback rendered: '+reason, 'warn');
+  } catch(e) {
+    log('showCurbFallback failed: '+e.message, 'err');
   }
 }
 
@@ -1103,22 +1488,26 @@ function closeAdFrame(source, durationSec, completed) {
   if(!adPlaying) return;
   clearTimeout(adWatchdog);
   adPlaying = false;
-  var frame = document.getElementById('ad-frame');
-  frame.style.display = 'none';
-  frame.src = '';
-  document.getElementById('idle-screen').style.display = 'flex';
-  S.fills++; S.src = source; updStats();
+  var container = document.getElementById('ad-frame-container');
+  if(container) container.innerHTML = ''; // destroy iframe completely
+  // Restore normal idle screen (in case Curb fallback replaced its contents)
+  var idle = document.getElementById('idle-screen');
+  if(idle) {
+    idle.innerHTML = '<div style="color:#222;font-size:32px;letter-spacing:8px;text-transform:uppercase">CURB</div>';
+    idle.style.display = 'flex';
+  }
+  // Only count as a fill if the ad actually completed (no more false positives)
+  if(completed) { S.fills++; }
+  else { S.err++; }
+  S.src = source; updStats();
   setNP('IDLE', 'Next ad in '+Math.round(INTERVAL/1000)+'s');
-  addEv('done', 'AD ENDED — '+source+' '+durationSec+'s', '');
-  log('Ad ended — '+source+' '+durationSec+'s completed:'+completed, 'ok');
+  addEv(completed?'done':'err', (completed?'AD ENDED — ':'NO FILL — ')+source+' '+durationSec+'s', '');
+  log('Ad ended — '+source+' '+durationSec+'s completed:'+completed, completed?'ok':'warn');
   if(cachedDur===0) cachedDur = durationSec;
-  // Send impression
-  sendImpressionWithRetry(source, durationSec, completed, 0, false);  // KV post handled inside
-  // Schedule next iframe ad cycle
+  sendImpressionWithRetry(source, durationSec, completed, 0, false);
   setTimeout(showAdFrame, INTERVAL);
 }
 
-// Handle bridge events from TrillboardsBridge (MainActivity.java) or postMessage
 window.addEventListener('message', function(e) {
   try {
     var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
@@ -1157,12 +1546,15 @@ function handleBridgeEvent(type, data) {
 }
 
 window.addEventListener('load',function(){
+  var badge=document.getElementById('player-mode-badge');
+  if(badge){badge.textContent='MODE: '+PLAYER_MODE.toUpperCase();badge.style.color=PLAYER_MODE==='native'?'#0f0':'#4af';}
   try{
     var sc=function(k){try{return localStorage.getItem(k);}catch(e){return null;}};
     var cv=parseFloat(sc('curb_cpm'));if(!isNaN(cv)&&cv>0){FLOOR_CPM=cv;var sf=document.getElementById('s-floor');if(sf)sf.textContent='$'+cv.toFixed(2);}
     var iv=parseInt(sc('curb_interval'));if(!isNaN(iv)&&iv>=5)INTERVAL=iv*1000;
     var hv=parseInt(sc('curb_hb'));if(!isNaN(hv)&&hv>=10)HB_INTERVAL_MS=hv*1000;
-    var tv=parseInt(sc('curb_timeout'));if(!isNaN(tv)&&tv>=3)WATERFALL_TIMEOUT=tv*1000;
+    // curb_timeout localStorage intentionally ignored — use KV remote config only
+    // var tv=parseInt(sc('curb_timeout'));if(!isNaN(tv)&&tv>=3)WATERFALL_TIMEOUT=tv*1000;
     var dv=sc('curb_did');if(dv&&dv.trim()){DEVICE_ID=dv.trim();HB_URL='https://api.trillboards.com/v1/partner/device/'+DEVICE_ID+'/heartbeat';}
     var sv=sc('curb_sid');if(sv&&sv.trim())SCREEN_ID=sv.trim();
     var kv=sc('curb_key');if(kv&&kv.trim()){HB_KEY=kv.trim();API_KEY=kv.trim();}
@@ -1172,19 +1564,59 @@ window.addEventListener('load',function(){
     var tsv=sc('curb_test');if(tsv==='1')TEST_MODE=true;
     var ffv=parseInt(sc('curb_font'));if(!isNaN(ffv)&&ffv>=8&&ffv<=18){FONT_SIZE=ffv;setFontSize(ffv);}
     log('Settings loaded','info');
+    // Inject Trillboards window globals — matches what their native app injects via Android JS interface
+    window.__TRILL_IS_CTV__ = true;
+    var _conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    window.__TRILL_CONNECTION_TYPE__ = (_conn && (_conn.type || _conn.effectiveType)) || 'wifi';
   }catch(e){log('Settings load error: '+e.message,'warn');}
   log('IMA: '+typeof google,'ok');
   updServerIntervalDisplay();
   pollConfig();
-  // Start iframe-based ad loop
-  setTimeout(showAdFrame, 2000);
+  // Start embed-based ad loop
+  setTimeout(showAdFrame, 6000); // Delay to ensure screen.trillboards.com WebView + OverlayEventBus are ready
   var _hbTimer=null;
   function reschedHeartbeat(ms){clearInterval(_hbTimer);_hbTimer=setInterval(sendHeartbeat,ms||HB_INTERVAL_MS);}
   sendHeartbeat();
   reschedHeartbeat();
   startGPS();
-  setInterval(function(){log('Hourly source refresh...','info');fetchSources(true);},3600000);
+  setTimeout(logWaterfallHealth, 5000); // startup snapshot — don't wait an hour for first data point
+  // Waterfall health logger — runs hourly regardless of player mode
+  // In embed mode sources[] may be empty so we fetch directly from Partner API
+  function logWaterfallHealth() {
+    fetch('https://trillboards-proxy.johnm-af2.workers.dev/earner-ads?screen_id='+SCREEN_ID+'&_='+Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.success && data.data && data.data.sources && data.data.sources.length > 0){
+        fetch('https://trillboards-proxy.johnm-af2.workers.dev/log-waterfall',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            sources: data.data.sources,
+            experiment: null,
+            screen_id: SCREEN_ID,
+            device_id: DEVICE_ID
+          })
+        }).catch(function(){});
+        log('Waterfall health logged ('+data.data.sources.length+' sources)','info');
+      }
+    }).catch(function(){});
+  }
+
+  setInterval(function(){
+    log('Hourly earner refresh...','info');
+    earnerCache=null; earnerCacheTs=0;
+    if(PLAYER_MODE==='native') fetchSources(true);
+    logWaterfallHealth();
+  },3600000);
   setInterval(function(){if(isOnline&&offlineQueue.length>0){log('Periodic flush: '+offlineQueue.length+' queued','info');flushQueue();}},60000);
+  // KV flush every 5 min — keeps writes under 1,000/day (288 flush + 24 waterfall + ~36 other = 348/day)
+  setInterval(function(){
+    var totals = loadTodayTotals();
+    if(totals.count > 0) {
+      log('5-min KV flush: '+totals.count+' requests, '+totals.completed+' completed','info');
+      flushKVBuffer(totals);
+    }
+  }, 300000);
 });
 </script>
 </body>

@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
+import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -30,7 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
-public class MainActivity extends CordovaActivity {
+public class MainActivity extends CordovaActivity implements NativeAdPlayer.NativeAdListener {
 
     private static final String TAG       = "CurbAds";
     private static final String DEVICE_ID = "P_691cbdd4b3117cb1b692f4ae";
@@ -44,6 +45,12 @@ public class MainActivity extends CordovaActivity {
     private boolean  adShowing   = false;
     private Handler  mainHandler = new Handler(Looper.getMainLooper());
     private Runnable adWatchdog  = null;
+
+    // ── Native IMA SDK player (Trillboards Partner API) ──
+    private NativeAdPlayer nativeAdPlayer = null;
+    private FrameLayout nativePlayerContainer = null;
+    private String playerMode = "embed";
+    private int consecutiveNativeFails = 0;
 
     // #5 Guard — onPageFinished can fire more than once (SPA client-side nav).
     // Only inject the OverlayEventBus subscription once per WebView lifetime.
@@ -197,21 +204,56 @@ public class MainActivity extends CordovaActivity {
 
         @JavascriptInterface
         public void showAd() {
-            Log.i(TAG, "showAd() called from JS");
-            mainHandler.post(() -> launchAdOverlay());
+            Log.i(TAG, "showAd() called from JS — mode=" + playerMode);
+            mainHandler.post(() -> {
+                if ("native".equals(playerMode) && nativeAdPlayer != null) {
+                    if (adShowing) return;
+                    adShowing = true;
+                    if (nativePlayerContainer != null) {
+                        nativePlayerContainer.setVisibility(View.VISIBLE);
+                        nativePlayerContainer.bringToFront();
+                        nativePlayerContainer.setSystemUiVisibility(
+                            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+                    }
+                    nativeAdPlayer.requestAndPlayAd();
+                } else {
+                    launchAdOverlay();
+                }
+            });
         }
 
         @JavascriptInterface
         public void closeAd() {
             Log.i(TAG, "closeAd() called from JS");
-            mainHandler.post(() -> dismissAdOverlay(false, "manual", 0));
+            mainHandler.post(() -> {
+                if ("native".equals(playerMode) && nativeAdPlayer != null) {
+                    nativeAdPlayer.cancel();
+                    if (nativePlayerContainer != null) nativePlayerContainer.setVisibility(View.GONE);
+                    adShowing = false;
+                } else {
+                    dismissAdOverlay(false, "manual", 0);
+                }
+            });
         }
 
         @JavascriptInterface
         public void setPlayerMode(String mode) {
-            // Mode switching no longer destroys WebView — content cache must be preserved
-            // In both modes WebView stays alive, just shown/hidden differently
-            Log.i(TAG, "setPlayerMode: " + mode + " (WebView always persistent)");
+            playerMode = mode;
+            Log.i(TAG, "setPlayerMode: " + mode);
+            mainHandler.post(() -> {
+                if ("native".equals(mode)) {
+                    if (nativeAdPlayer == null) createNativePlayerContainer();
+                    nativeAdPlayer.startHeartbeat();
+                    consecutiveNativeFails = 0;
+                } else {
+                    if (nativeAdPlayer != null) nativeAdPlayer.stopHeartbeat();
+                }
+            });
         }
 
         @JavascriptInterface
@@ -550,9 +592,9 @@ public class MainActivity extends CordovaActivity {
         }
 
         // Use Sneh's official trigger API — window.minimalAdvertisementOverlay.checkAndShowAds(true)
-        // Retry up to 10 times with 1s delay if not ready yet.
-        // #8 If still not ready after 10 attempts, tell our Cordova JS so it can render
-        //    the Curb fallback instead of sitting on a black overlay for 5 minutes.
+        // Retry up to 30 times with 1s delay if not ready yet (30 seconds total).
+        // BUG FIX: Previously sent waterfallExhausted:true on timeout which killed every ad cycle.
+        // Now just logs a warning and lets the 5-min watchdog handle it naturally.
         adWebView.evaluateJavascript(
             "(function tryTrigger(attempt){" +
             "  try{" +
@@ -560,13 +602,11 @@ public class MainActivity extends CordovaActivity {
             "    if(mao && typeof mao.checkAndShowAds === 'function'){" +
             "      mao.checkAndShowAds(true);" +
             "      console.log('[CurbAds] checkAndShowAds(true) called (attempt '+attempt+')');" +
-            "    } else if(attempt < 10){" +
+            "    } else if(attempt < 30){" +
             "      console.log('[CurbAds] checkAndShowAds not ready — retrying in 1s (attempt '+attempt+')');" +
             "      setTimeout(function(){ tryTrigger(attempt+1); }, 1000);" +
             "    } else {" +
-            "      console.log('[CurbAds] checkAndShowAds unavailable after 10 attempts — notifying Cordova fallback');" +
-            "      try{ OverlayEventBridge.onEvent(JSON.stringify({type:'ad:error'," +
-            "        error:'checkAndShowAds_unavailable',waterfallExhausted:true})); }catch(e){}" +
+            "      console.log('[CurbAds] checkAndShowAds unavailable after 30 attempts — waiting for safety watchdog');" +
             "    }" +
             "  }catch(e){console.log('[CurbAds] checkAndShowAds error: '+e.message);}" +
             "})(1)", null);
@@ -708,6 +748,91 @@ public class MainActivity extends CordovaActivity {
                 "if(typeof onAdOverlayClosed==='function') onAdOverlayClosed(" + comp
                     + ",'" + src + "'," + dur + ");",
                 null));
+        }
+    }
+
+    // ── Native IMA SDK player container + callbacks ────────────────────────────
+    private void createNativePlayerContainer() {
+        if (nativePlayerContainer != null) return;
+        Log.i(TAG, "Creating native IMA player container");
+        nativePlayerContainer = new FrameLayout(this);
+        nativePlayerContainer.setBackgroundColor(Color.BLACK);
+        nativePlayerContainer.setVisibility(View.GONE);
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT);
+        android.view.ViewGroup decorView = (android.view.ViewGroup) getWindow().getDecorView();
+        decorView.addView(nativePlayerContainer, params);
+
+        nativeAdPlayer = new NativeAdPlayer(this, nativePlayerContainer, this);
+        Log.i(TAG, "NativeAdPlayer created");
+    }
+
+    // ── NativeAdPlayer.NativeAdListener implementation ───────────────────────
+
+    @Override
+    public void onAdStarted(String source, String requestId) {
+        consecutiveNativeFails = 0;
+        Log.i(TAG, "NATIVE AD STARTED — " + source + " reqId=" + requestId);
+        if (appView != null) {
+            runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                "if(typeof onNativeAdEvent==='function') onNativeAdEvent('started','"
+                    + source + "',0,'" + requestId + "');", null));
+        }
+    }
+
+    @Override
+    public void onAdCompleted(String source, int durationSec, String requestId) {
+        consecutiveNativeFails = 0;
+        adShowing = false;
+        if (nativePlayerContainer != null) nativePlayerContainer.setVisibility(View.GONE);
+        Log.i(TAG, "NATIVE AD COMPLETED — " + source + " " + durationSec + "s");
+        // Log to KV via existing mechanism
+        postToKV("ad_ended", source, durationSec, true);
+        if (appView != null) {
+            runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                "if(typeof onNativeAdEvent==='function') onNativeAdEvent('completed','"
+                    + source + "'," + durationSec + ",'" + requestId + "');", null));
+        }
+    }
+
+    @Override
+    public void onNoFill(String lastSource) {
+        consecutiveNativeFails++;
+        adShowing = false;
+        if (nativePlayerContainer != null) nativePlayerContainer.setVisibility(View.GONE);
+        Log.w(TAG, "NATIVE NO FILL — " + lastSource + " (consecutive fails: " + consecutiveNativeFails + ")");
+        // Auto-fallback to embed after 3 consecutive failures
+        if (consecutiveNativeFails >= 3) {
+            Log.w(TAG, "3 consecutive native failures — auto-switching to embed mode");
+            playerMode = "embed";
+            if (nativeAdPlayer != null) nativeAdPlayer.stopHeartbeat();
+            if (appView != null) {
+                runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                    "PLAYER_MODE='embed';log('Auto-fallback to embed after 3 native failures','warn');"
+                    + "var b=document.getElementById('player-mode-badge');"
+                    + "if(b){b.textContent='MODE: EMBED (AUTO)';b.style.color='#f80';}", null));
+            }
+        }
+        if (appView != null) {
+            runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                "if(typeof onNativeAdEvent==='function') onNativeAdEvent('no_fill','"
+                    + lastSource + "',0,'');", null));
+        }
+    }
+
+    @Override
+    public void onError(String source, String error) {
+        consecutiveNativeFails++;
+        adShowing = false;
+        if (nativePlayerContainer != null) nativePlayerContainer.setVisibility(View.GONE);
+        Log.e(TAG, "NATIVE ERROR — " + source + ": " + error + " (consecutive fails: " + consecutiveNativeFails + ")");
+        if (appView != null) {
+            final String safeError = (error != null ? error : "unknown").replace("'", "\\'");
+            runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                "if(typeof onNativeAdEvent==='function') onNativeAdEvent('error','"
+                    + source + "',0,'');", null));
         }
     }
 

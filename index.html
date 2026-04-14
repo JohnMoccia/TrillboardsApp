@@ -785,6 +785,7 @@ function parseDeviceInfo(){
 }
 
 function sendHeartbeat(){
+  if(PLAYER_MODE === 'native') return; // Java NativeAdPlayer handles heartbeat with proper device fields
   var dev=parseDeviceInfo();
   fetch(HB_URL,{method:'POST',headers:{'Authorization':'Bearer '+HB_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({device_id:DEVICE_ID,timestamp:new Date().toISOString(),status:'active',uptime_seconds:Math.floor((Date.now()-t0)/1000),impressions:S.imp||0,make:'Samsung',model:dev.model,os_version:dev.os_version,device_category:'tablet',venue_type:'transit',screen_id:SCREEN_ID,device:{os:'Android',osv:'11',make:'Samsung',model:dev.model},sdk:{ima_supported:true,ima_integration:'html5_webview'}})
@@ -1335,9 +1336,19 @@ var adWatchdog = null;
 
 function showAdFrame() {
   if(PLAYER_MODE === 'native') {
-    log('Native player mode — fetching earner waterfall', 'info');
-    setNP('FETCHING...', 'Earner API via Worker');
-    fetchSources(false, false);
+    if(adPlaying) return;
+    adPlaying = true;
+    log('Native IMA mode — delegating to Java NativeAdPlayer', 'info');
+    setNP('LOADING AD...', 'via Native IMA SDK');
+    addEv('start', 'NATIVE AD REQUESTED', '');
+    incKVRequest();
+    if(typeof CurbBridge !== 'undefined') {
+      CurbBridge.showAd();
+    } else {
+      log('CurbBridge not available for native mode', 'err');
+      adPlaying = false;
+      setTimeout(showAdFrame, INTERVAL);
+    }
     return;
   }
 
@@ -1401,6 +1412,44 @@ function onAdOverlayClosed(completed, source, durationSec) {
   adTypeThisCycle = 'unknown'; adSourceThisCycle = 'unknown';
 }
 
+// ── Native IMA SDK event callback — called from Java NativeAdPlayer via evaluateJavascript ──
+function onNativeAdEvent(type, source, durationSec, requestId) {
+  log('NativeAdEvent: ' + type + ' src=' + source + ' dur=' + durationSec, type === 'error' ? 'err' : 'ok');
+  switch(type) {
+    case 'started':
+      adStartedThisCycle = true;
+      S.fills++; S.src = source; updStats();
+      setNP('PLAYING', source + ' (native IMA)');
+      addEv('start', 'NATIVE AD STARTED — ' + source, requestId);
+      break;
+    case 'completed':
+      adStartedThisCycle = false;
+      adPlaying = false;
+      S.done++; updStats();
+      setNP('IDLE', 'Next ad in ' + Math.round(INTERVAL/1000) + 's');
+      addEv('done', 'NATIVE AD ENDED — ' + source + ' ' + durationSec + 's', requestId);
+      sendImpressionWithRetry(source, durationSec, true, 0, false);
+      setTimeout(showAdFrame, INTERVAL);
+      break;
+    case 'no_fill':
+      adStartedThisCycle = false;
+      adPlaying = false;
+      S.err++; updStats();
+      addEv('err', 'NATIVE NO FILL — ' + source, '');
+      setNP('NO FILL', 'Native waterfall exhausted');
+      setTimeout(showAdFrame, INTERVAL);
+      break;
+    case 'error':
+      adStartedThisCycle = false;
+      adPlaying = false;
+      S.err++; updStats();
+      addEv('err', 'NATIVE ERROR — ' + source, '');
+      setNP('ERROR', source);
+      setTimeout(showAdFrame, INTERVAL);
+      break;
+  }
+}
+
 function handleOverlayLog(msg) {
   if(msg.indexOf('STARTED') >= 0 || msg.indexOf('AD_STARTED') >= 0 || msg.indexOf('ad_start') >= 0) {
     clearTimeout(adWatchdog);
@@ -1414,16 +1463,11 @@ function handleOverlayLog(msg) {
     }, 60000);
   }
   if(msg.indexOf('waterfallExhausted":true') >= 0 || msg.indexOf('waterfall_exhausted') >= 0) {
-    log('Overlay: waterfall exhausted — rendering Curb fallback','warn');
-    addEv('err', 'NO FILL — waterfall exhausted, Curb fallback', '');
+    // BUG FIX: Don't hijack with showCurbFallback — let Trillboards' own content cache handle no-fill.
+    // Previously this triggered a Big Buck Bunny placeholder that blocked all real ads.
+    log('Overlay: waterfall exhausted — letting provider content cache handle it','warn');
+    addEv('err', 'NO FILL — waterfall exhausted (provider handling)', '');
     S.err++; updStats();
-    clearTimeout(adWatchdog);
-    // Short grace window for provider content cache (~5s) then take over with Curb fallback
-    adWatchdog = setTimeout(function(){
-      showCurbFallback('waterfall_exhausted');
-      // hold fallback 20s then close and continue cycle
-      setTimeout(function(){ closeAdFrame('no_fill', 0, false); }, 20000);
-    }, 5000);
   }
   if(msg.indexOf('COMPLETE') >= 0 && msg.indexOf('Overlay') >= 0) {
     clearTimeout(adWatchdog);
