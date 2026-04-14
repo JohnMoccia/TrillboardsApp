@@ -276,7 +276,7 @@ public class NativeAdPlayer {
         }).start();
     }
 
-    private List<WaterfallSource> fetchAdSources() throws IOException {
+    private List<WaterfallSource> fetchAdSources() throws Exception {
         String url = API_BASE + "/v1/partner/device/" + DEVICE_ID + "/ads"
             + "?slot_w=1920&slot_h=1080"
             + "&orientation=landscape"
