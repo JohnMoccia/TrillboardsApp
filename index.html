@@ -302,6 +302,12 @@ var fillByHour=[];for(var _h=0;_h<24;_h++)fillByHour.push({fills:0,reqs:0});
 var POLL_INTERVAL_S = 60;   // default, overridden by data.poll_interval_s
 var RETRY_ON_ERROR_S = 30;  // default, overridden by data.retry_on_error_s
 
+// Curb fallback toggle — default OFF. Provider's embed has its own VPAID/default-stream
+// fallback path that takes over when SSPs exhaust (once default_stream_enabled=true on
+// their side). We leave that pathway untouched unless this flag is flipped on via remote
+// config: POST {"curb_fallback_enabled": true} to /set-config on the worker.
+var CURB_FALLBACK_ENABLED = false;
+
 function updServerIntervalDisplay() {
   var sp = document.getElementById('s-poll-interval');
   var sr = document.getElementById('s-retry-interval');
@@ -362,6 +368,13 @@ function applyRemoteConfig(cfg) {
   }
   if (cfg.config_poll_interval != null && cfg.config_poll_interval >= 30) {
     CONFIG_POLL_MS = parseInt(cfg.config_poll_interval) * 1000;
+  }
+  if (cfg.curb_fallback_enabled != null) {
+    CURB_FALLBACK_ENABLED = !!cfg.curb_fallback_enabled;
+    log('Curb fallback: ' + (CURB_FALLBACK_ENABLED ? 'ENABLED' : 'DISABLED') + ' (remote config)', 'info');
+    if (typeof CurbBridge !== 'undefined' && CurbBridge.setFallbackEnabled) {
+      CurbBridge.setFallbackEnabled(CURB_FALLBACK_ENABLED);
+    }
   }
   lastConfigTs = new Date().toTimeString().substring(0, 8);
   var badge = document.getElementById('config-badge');
@@ -1423,21 +1436,48 @@ function handleOverlayLog(msg) {
 }
 
 // ── Curb fallback screen (shown when waterfall exhausts or embed is unresponsive) ──
+// TODO: replace this URL with a real Curb-branded MP4 hosted on your CDN.
+// Must be HTTPS, muted-autoplay friendly, H.264 MP4 for WebView compatibility.
+var CURB_FALLBACK_VIDEO = 'https://www.w3schools.com/html/mov_bbb.mp4';
+
 function showCurbFallback(reason){
+  if (!CURB_FALLBACK_ENABLED) {
+    log('showCurbFallback skipped — disabled by remote config (reason='+reason+')', 'info');
+    return;
+  }
   try {
     var idle = document.getElementById('idle-screen');
     if(!idle) return;
-    idle.innerHTML = '<div style="text-align:center;color:#0fc;font-family:monospace;letter-spacing:4px">'+
-      '<div style="font-size:36px;margin-bottom:14px;color:#fff">CURB</div>'+
-      '<div style="font-size:14px;color:#0fc;margin-bottom:6px">NO FILL</div>'+
-      '<div style="font-size:10px;color:#555">'+reason+'</div>'+
-      '<div style="font-size:10px;color:#333;margin-top:10px" id="cf-countdown"></div>'+
+    idle.innerHTML =
+      '<div style="position:absolute;top:0;left:0;width:100%;height:100%;background:#000">'+
+      '  <video id="curb-fallback-video" autoplay muted loop playsinline '+
+      '         style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1" '+
+      '         src="'+CURB_FALLBACK_VIDEO+'"></video>'+
+      '  <div style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;'+
+      '              background:linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(0,0,0,0.85) 100%);'+
+      '              pointer-events:none"></div>'+
+      '  <div style="position:absolute;bottom:40px;left:0;right:0;text-align:center;z-index:3;'+
+      '              font-family:monospace;color:#fff">'+
+      '    <div style="font-size:56px;letter-spacing:14px;font-weight:bold">CURB</div>'+
+      '    <div style="font-size:14px;color:#0fc;letter-spacing:4px;margin-top:4px">HOUSE AD — NO FILL</div>'+
+      '    <div style="font-size:10px;color:#666;margin-top:6px">'+reason+'</div>'+
+      '  </div>'+
       '</div>';
     idle.style.display = 'flex';
+    // Force play in case autoplay was blocked
+    var v = document.getElementById('curb-fallback-video');
+    if(v) {
+      v.onerror = function(){ log('Curb fallback video failed to load: '+CURB_FALLBACK_VIDEO, 'err'); };
+      v.onplaying = function(){ log('Curb fallback video playing', 'ok'); };
+      var pp = v.play();
+      if(pp && typeof pp.catch === 'function') pp.catch(function(e){
+        log('Curb fallback autoplay rejected: '+e.message, 'warn');
+      });
+    }
     // Hide the provider iframe if one exists; native WebView is hidden by Java on dismiss
     var container = document.getElementById('ad-frame-container');
     if(container) container.innerHTML = '';
-    setNP('NO FILL', 'Curb fallback — '+reason);
+    setNP('HOUSE AD', 'Curb fallback — '+reason);
     log('Curb fallback rendered: '+reason, 'warn');
   } catch(e) {
     log('showCurbFallback failed: '+e.message, 'err');

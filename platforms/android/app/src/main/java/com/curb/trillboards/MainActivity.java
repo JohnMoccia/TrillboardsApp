@@ -49,6 +49,11 @@ public class MainActivity extends CordovaActivity {
     // Only inject the OverlayEventBus subscription once per WebView lifetime.
     private boolean overlaySubscribed = false;
 
+    // Curb fallback gate — synced from JS via CurbBridge.setFallbackEnabled() which
+    // reflects the remote config key `curb_fallback_enabled`. Default OFF: we let the
+    // provider's embed handle all no-fill behavior (their VPAID/default-stream path).
+    private boolean fallbackEnabled = false;
+
     // SOV tracking — set by OverlayEventBus events
     private boolean programmaticFillThisCycle = false;
     private String  adSourceThisCycle         = "content_cache";
@@ -208,6 +213,12 @@ public class MainActivity extends CordovaActivity {
             // In both modes WebView stays alive, just shown/hidden differently
             Log.i(TAG, "setPlayerMode: " + mode + " (WebView always persistent)");
         }
+
+        @JavascriptInterface
+        public void setFallbackEnabled(boolean enabled) {
+            fallbackEnabled = enabled;
+            Log.i(TAG, "Fallback enabled=" + enabled + " (set by JS from remote config)");
+        }
     }
 
     // ── Create persistent ad WebView ─────────────────────────────────────────
@@ -277,6 +288,14 @@ public class MainActivity extends CordovaActivity {
                                 if (msg.contains("errorCode\":303") || msg.contains("\"code\":303")) b[1]++;
                                 else b[2]++;
                             }
+                        }
+
+                        // Early fallback trigger — only fires when remote config has flipped
+                        // fallbackEnabled=true. By default we defer to the provider's own
+                        // VPAID/default-stream fallback inside the embed WebView.
+                        if (fallbackEnabled && adShowing && adStartedCount == 0) {
+                            Log.w(TAG, "Early fallback — waterfallExhausted detected, no ad_started yet, cutting to house ad");
+                            mainHandler.post(() -> triggerEarlyFallback("waterfall_exhausted_early"));
                         }
                     }
 
@@ -509,6 +528,7 @@ public class MainActivity extends CordovaActivity {
     private void launchAdOverlay() {
         if (adShowing) return;
         adShowing = true;
+        earlyFallbackArmed = false;
         programmaticFillThisCycle = false;
         adSourceThisCycle = "content_cache";
         Log.i(TAG, "Showing ad overlay");
@@ -562,22 +582,57 @@ public class MainActivity extends CordovaActivity {
                 + "OverlayEventBus not emitting ad:completed. Source cycle=" + adSourceThisCycle
                 + " programmatic=" + programmaticFillThisCycle);
             Log.e(TAG, "SSP_STATS " + sspSummary);
-            // Notify Cordova JS explicitly so the dashboard and logs record a NO_FILL event
+            // Only hide the ad WebView + render Curb fallback when the remote-config
+            // toggle is on. By default we leave the provider's embed visible and let it
+            // continue its own VPAID/default-stream fallback internally.
+            final boolean doFallback = fallbackEnabled;
+            if (doFallback && adWebView != null) adWebView.setVisibility(android.view.View.GONE);
             if (appView != null) {
-                // Escape the JSON for embedding in a JS string literal
                 final String jsonEsc = sspJson.replace("\\", "\\\\").replace("'", "\\'");
-                runOnUiThread(() -> appView.getEngine().evaluateJavascript(
-                    "if(typeof log==='function') log('NATIVE SAFETY WATCHDOG FIRED — dismissing as no_fill','err');"
-                  + "if(typeof addEv==='function') addEv('err','NATIVE SAFETY WATCHDOG 5min','');"
-                  + "if(typeof showCurbFallback==='function') showCurbFallback('native_safety_watchdog');"
-                  + "if(typeof onSspStats==='function') onSspStats('" + jsonEsc + "');",
-                    null));
+                String js = "if(typeof log==='function') log('NATIVE SAFETY WATCHDOG FIRED"
+                          + (doFallback ? " — playing Curb house ad fallback" : "") + "','err');"
+                          + "if(typeof addEv==='function') addEv('err','NATIVE SAFETY WATCHDOG 5min','');"
+                          + "if(typeof onSspStats==='function') onSspStats('" + jsonEsc + "');";
+                if (doFallback) {
+                    js += "if(typeof showCurbFallback==='function') showCurbFallback('native_safety_watchdog');";
+                }
+                final String jsFinal = js;
+                runOnUiThread(() -> appView.getEngine().evaluateJavascript(jsFinal, null));
             }
-            // Reset stats for the next window
             resetSspStats();
-            dismissAdOverlay(false, "no_fill", 0);
+            long dismissDelay = doFallback ? 20000 : 0;
+            mainHandler.postDelayed(() -> dismissAdOverlay(false, "no_fill", 0), dismissDelay);
         };
         mainHandler.postDelayed(adWatchdog, 300000);
+    }
+
+    // Early fallback path — invoked from WebChromeClient when we detect waterfallExhausted
+    // BEFORE the 5-min safety watchdog fires. Hides the ad WebView, plays the Curb house
+    // ad for 20s, then dismisses the overlay so the next cycle can start.
+    private boolean earlyFallbackArmed = false;
+    private void triggerEarlyFallback(String reason) {
+        if (!adShowing) return;
+        if (earlyFallbackArmed) return;
+        earlyFallbackArmed = true;
+        Log.i(TAG, "triggerEarlyFallback: " + reason);
+        // Cancel the 5-min safety watchdog — we're resolving this cycle now
+        if (adWatchdog != null) mainHandler.removeCallbacks(adWatchdog);
+        // Hide the ad WebView so the Cordova fallback is visible
+        if (adWebView != null) adWebView.setVisibility(android.view.View.GONE);
+        // Tell Cordova to render the fallback video
+        if (appView != null) {
+            final String r = reason;
+            runOnUiThread(() -> appView.getEngine().evaluateJavascript(
+                "if(typeof log==='function') log('Early Curb fallback — " + r + "','warn');"
+              + "if(typeof addEv==='function') addEv('err','EARLY FALLBACK — " + r + "','');"
+              + "if(typeof showCurbFallback==='function') showCurbFallback('" + r + "');",
+                null));
+        }
+        // Hold fallback 20s then dismiss
+        mainHandler.postDelayed(() -> {
+            earlyFallbackArmed = false;
+            dismissAdOverlay(false, "no_fill", 0);
+        }, 20000);
     }
 
     private void notifyJsNoFill() {
